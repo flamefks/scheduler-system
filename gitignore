@@ -1,0 +1,57 @@
+# Binaries
+/bin/
+/build/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+coverage.out
+
+# Vendor 
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.pid
+
+# Temp
+tmp/
+temp/
+
+# Generated files
+*.pb.go
+
+# Migrations
+*.sql.tmp
+
+# Secrets
+secrets/
+config.yaml
+config.yml
+
+# Test cache
+*.coverprofile
