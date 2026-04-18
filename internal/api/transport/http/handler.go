@@ -1,4 +1,174 @@
 package http
 
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/flamefks/scheduler-system/internal/api/domain"
+	"github.com/flamefks/scheduler-system/internal/api/service"
+	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+)
+
 type ApiHandler struct {
+	apiService *service.ApiService
+}
+
+func NewApiHandler(service *service.ApiService) *ApiHandler {
+	return &ApiHandler{
+		apiService: service,
+	}
+}
+
+func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
+	var req CreateJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteJSON(w, http.StatusBadRequest, shared.BasicResonse{
+			Status:  "error",
+			Message: "error decoding request body",
+		})
+		return
+	}
+
+	jobDomain := &shared.Job{
+		Name: req.Name,
+		Schedule: shared.Schedule{
+			RepeatIntervalSec: req.Schedule.RepeatIntervalSec,
+			TargetRuns:        req.Schedule.TargetRuns,
+			DoneRuns:          0,
+			NextRunAt:         req.Schedule.NextRunAt,
+			LastRunAt:         nil,
+		},
+		FetcherConfig: shared.IOConfig{
+			Payload:    req.FetcherConfig.Payload,
+			HeaderAuth: req.FetcherConfig.HeaderAuth,
+		},
+		DeliverConfig: shared.IOConfig{
+			Payload:    req.DeliverConfig.Payload,
+			HeaderAuth: req.DeliverConfig.HeaderAuth,
+		},
+	}
+
+	jobID, err := h.apiService.CreateJob(r.Context(), jobDomain)
+	if err != nil {
+		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusCreated, map[string]any{
+		"status": "success",
+		"data": map[string]string{
+			"id": jobID.String(),
+		},
+	})
+}
+
+func (h *ApiHandler) GetJob(w http.ResponseWriter, r *http.Request) {
+	id, err := CheckUUID(chi.URLParam(r, "id"), w)
+	if err != nil {
+		return
+	}
+
+	job, err := h.apiService.GetJobByID(r.Context(), id)
+	if err != nil {
+		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, GetJobResponse{
+		Status: "success",
+		Data:   job,
+	})
+}
+
+func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
+	id, err := CheckUUID(chi.URLParam(r, "id"), w)
+	if err != nil {
+		return
+	}
+
+	var req PatchJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteJSON(w, http.StatusBadRequest, shared.BasicResonse{
+			Status:  "error",
+			Message: "error decoding request body",
+		})
+		return
+	}
+
+	patch := &domain.PatchJobModel{
+		Name: req.Name,
+	}
+
+	if req.Schedule != nil {
+		patch.Schedule = &domain.PatchScheduleModel{
+			RepeatIntervalSec: req.Schedule.RepeatIntervalSec,
+			TargetRuns:        req.Schedule.TargetRuns,
+			NextRunAt:         req.Schedule.NextRunAt,
+		}
+	}
+
+	if req.FetcherConfig != nil {
+		patch.FetcherConfig = &domain.PatchIOConfig{
+			Payload:    req.FetcherConfig.Payload,
+			HeaderAuth: req.FetcherConfig.HeaderAuth,
+		}
+	}
+
+	if req.DeliverConfig != nil {
+		patch.DeliverConfig = &domain.PatchIOConfig{
+			Payload:    req.DeliverConfig.Payload,
+			HeaderAuth: req.DeliverConfig.HeaderAuth,
+		}
+	}
+
+	if err := h.apiService.PatchJob(r.Context(), patch, id); err != nil {
+		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	shared.WriteJSON(w, http.StatusOK, shared.BasicResonse{
+		Status:  "success",
+		Message: "Job successfully updated",
+	})
+}
+
+func (h *ApiHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
+	id, err := CheckUUID(chi.URLParam(r, "id"), w)
+	if err != nil {
+		return
+	}
+
+	if err := h.apiService.DeleteJob(r.Context(), id); err != nil {
+		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// helper
+func CheckUUID(strId string, w http.ResponseWriter) (uuid.UUID, error) {
+	id, err := uuid.Parse(strId)
+	if err != nil {
+		shared.WriteJSON(w, 400, shared.BasicResonse{
+			Status:  "error",
+			Message: "Incorrect id type",
+		})
+		return uuid.Nil, err
+	}
+	return id, nil
 }

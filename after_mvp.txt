@@ -1,0 +1,2 @@
+    response_schema JSONB NULL - отдельная таблица строго structed 
+    retry_policy JSONB NOT NULL - добавление валидация ответа внешнего апи

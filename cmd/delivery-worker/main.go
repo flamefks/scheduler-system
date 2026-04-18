@@ -9,13 +9,9 @@ import (
 	"syscall"
 
 	generalConf "github.com/flamefks/scheduler-system/internal/config"
-	coreConf "github.com/flamefks/scheduler-system/internal/fetcher/config"
-	"github.com/flamefks/scheduler-system/internal/fetcher/service"
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	qnats "github.com/flamefks/scheduler-system/internal/queue/nats"
-	"github.com/flamefks/scheduler-system/internal/shared"
 	"github.com/nats-io/nats.go"
 )
 
@@ -36,17 +32,6 @@ func main() {
 		log.Fatal(err)
 	}
 	logger.Info("logger_init", "status", "success")
-
-	// core config
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
-	if err != nil {
-		logger.Error("core_config_initialization",
-			slog.String("status", "error"),
-			slog.Any("err", err),
-		)
-		os.Exit(1)
-	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -81,26 +66,4 @@ func main() {
 		slog.String("status", "success"),
 		slog.String("url", coreCfg.Nats.Url),
 	)
-
-	// service initialization
-	publisher := qnats.NewPublisher(js)
-	repository := shared.NewWorkerRepository(queries)
-	fetcherService := service.NewFetcherService(
-		logger,
-		publisher,
-		repository,
-	)
-
-	// consumer
-	consumer := qnats.NewConsumer(js, shared.JobsSubjectFetcher)
-
-	logger.Info("service_started")
-
-	if err := consumer.Consume(appCtx, fetcherService.PipelineHandler, fetcherService.ErrorHandler,
-		shared.FetcherGroup); err != nil {
-		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
-		os.Exit(1)
-	}
-
-	logger.Info("service_stopped")
 }

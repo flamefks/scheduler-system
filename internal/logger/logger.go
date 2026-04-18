@@ -12,8 +12,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-func New(cfg *appconfig.LoggingConfig, fileCfg appconfig.FileSettings) (*slog.Logger, error) {
-	writer, err := buildWriter(cfg, fileCfg)
+func NewLogger(cfg *appconfig.LoggingConfig) (*slog.Logger, error) {
+	writer, err := buildWriter(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -30,42 +30,29 @@ func New(cfg *appconfig.LoggingConfig, fileCfg appconfig.FileSettings) (*slog.Lo
 	var handler slog.Handler
 
 	switch strings.ToLower(cfg.Format) {
-	case "json":
-		handler = slog.NewJSONHandler(writer, opts)
 	case "text":
 		handler = slog.NewTextHandler(writer, opts)
 	default:
-		return nil, fmt.Errorf("unsupported log format: %s", cfg.Format)
+		handler = slog.NewJSONHandler(writer, opts)
 	}
 
 	return slog.New(handler), nil
 }
 
-func buildWriter(cfg *appconfig.LoggingConfig, fileCfg appconfig.FileSettings) (io.Writer, error) {
+func buildWriter(cfg *appconfig.LoggingConfig) (io.Writer, error) {
 	switch strings.ToLower(cfg.Output) {
-	case "stdout":
-		return os.Stdout, nil
-
 	case "file":
-		fileWriter, err := newRollingFileWriter(fileCfg)
+		fileWriter, err := newRollingFileWriter(cfg.Logger)
 		if err != nil {
 			return nil, err
 		}
 		return fileWriter, nil
-
-	case "both":
-		fileWriter, err := newRollingFileWriter(fileCfg)
-		if err != nil {
-			return nil, err
-		}
-		return io.MultiWriter(os.Stdout, fileWriter), nil
-
 	default:
-		return nil, fmt.Errorf("unsupported log output: %s", cfg.Output)
+		return os.Stdout, nil
 	}
 }
 
-func newRollingFileWriter(fileCfg appconfig.FileSettings) (io.Writer, error) {
+func newRollingFileWriter(fileCfg *appconfig.FileSettings) (io.Writer, error) {
 	if fileCfg.Path == "" {
 		return nil, fmt.Errorf("logging file path is required")
 	}
@@ -88,8 +75,6 @@ func newRollingFileWriter(fileCfg appconfig.FileSettings) (io.Writer, error) {
 
 func parseLevel(raw string) (slog.Level, error) {
 	switch strings.ToLower(raw) {
-	case "debug":
-		return slog.LevelDebug, nil
 	case "info":
 		return slog.LevelInfo, nil
 	case "warn", "warning":
@@ -97,6 +82,6 @@ func parseLevel(raw string) (slog.Level, error) {
 	case "error":
 		return slog.LevelError, nil
 	default:
-		return 0, fmt.Errorf("unsupported log level: %s", raw)
+		return slog.LevelDebug, nil
 	}
 }

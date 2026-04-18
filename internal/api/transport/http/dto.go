@@ -1,0 +1,66 @@
+package http
+
+import (
+	"time"
+
+	"github.com/flamefks/scheduler-system/internal/shared"
+)
+
+// =========================
+// CREATE
+// =========================
+// Requests - CreateJob
+type ScheduleBlockCreateJobRequest struct {
+	NextRunAt         time.Time `json:"next_run_at"`
+	RepeatIntervalSec int32     `json:"repeat_interval_sec"`
+	TargetRuns        int32     `json:"target_runs"`
+}
+
+type IOBlockCreateJobRequest struct {
+	Payload    []byte `json:"payload"`
+	HeaderAuth []byte `json:"header_auth"`
+}
+
+type CreateJobRequest struct {
+	Name     string                        `json:"name"`
+	Schedule ScheduleBlockCreateJobRequest `json:"schedule"`
+
+	FetcherConfig IOBlockCreateJobRequest `json:"fetcher_config"`
+	DeliverConfig IOBlockCreateJobRequest `json:"deliver_config"`
+}
+
+// =========================
+// Patch
+// =========================
+// Requests - PatchJob
+
+type ScheduleBlockPatchJobRequest struct {
+	NextRunAt         *time.Time `json:"next_run_at"`
+	RepeatIntervalSec *int32     `json:"repeat_interval_sec"`
+	TargetRuns        *int32     `json:"target_runs"`
+}
+
+type IOBlockPatchJobRequest struct {
+	Payload    *[]byte `json:"payload"`
+	HeaderAuth *[]byte `json:"header_auth"`
+}
+
+type PatchJobRequest struct {
+	Name     *string                       `json:"name"`
+	Schedule *ScheduleBlockPatchJobRequest `json:"schedule"`
+
+	FetcherConfig *IOBlockPatchJobRequest `json:"fetcher_config"`
+	DeliverConfig *IOBlockPatchJobRequest `json:"deliver_config"`
+}
+
+// =========================
+// Responses
+// =========================
+type GetJobResponse struct {
+	Status string      `json:"status"`
+	Data   *shared.Job `json:"data"`
+}
+
+type ResponseWithUUID struct {
+	Status string `json:"status"`
+}

@@ -1,0 +1,11 @@
+.git
+.gitignore
+.idea
+.vscode
+tmp
+bin
+dist
+vendor
+*.log
+.env
+docker-compose.override.yml
