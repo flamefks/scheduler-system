@@ -6,7 +6,8 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
 	"github.com/flamefks/scheduler-system/internal/api/service"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
+	httputils "github.com/flamefks/scheduler-system/internal/shared/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -24,27 +25,27 @@ func NewApiHandler(service *service.ApiService) *ApiHandler {
 func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 	var req CreateJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSON(w, http.StatusBadRequest, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "error decoding request body",
 		})
 		return
 	}
 
-	jobDomain := &shared.Job{
+	jobDomain := &data.Job{
 		Name: req.Name,
-		Schedule: shared.Schedule{
+		Schedule: data.Schedule{
 			RepeatIntervalSec: req.Schedule.RepeatIntervalSec,
 			TargetRuns:        req.Schedule.TargetRuns,
 			DoneRuns:          0,
 			NextRunAt:         req.Schedule.NextRunAt,
 			LastRunAt:         nil,
 		},
-		FetcherConfig: shared.IOConfig{
+		FetcherConfig: data.IOConfig{
 			Payload:    req.FetcherConfig.Payload,
 			HeaderAuth: req.FetcherConfig.HeaderAuth,
 		},
-		DeliverConfig: shared.IOConfig{
+		DeliverConfig: data.IOConfig{
 			Payload:    req.DeliverConfig.Payload,
 			HeaderAuth: req.DeliverConfig.HeaderAuth,
 		},
@@ -52,14 +53,14 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 	jobID, err := h.apiService.CreateJob(r.Context(), jobDomain)
 	if err != nil {
-		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusInternalServerError, data.BasicResonse{
 			Status:  "error",
 			Message: err.Error(),
 		})
 		return
 	}
 
-	shared.WriteJSON(w, http.StatusCreated, map[string]any{
+	httputils.WriteJSON(w, http.StatusCreated, map[string]any{
 		"status": "success",
 		"data": map[string]string{
 			"id": jobID.String(),
@@ -75,14 +76,14 @@ func (h *ApiHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.apiService.GetJobByID(r.Context(), id)
 	if err != nil {
-		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusInternalServerError, data.BasicResonse{
 			Status:  "error",
 			Message: err.Error(),
 		})
 		return
 	}
 
-	shared.WriteJSON(w, http.StatusOK, GetJobResponse{
+	httputils.WriteJSON(w, http.StatusOK, GetJobResponse{
 		Status: "success",
 		Data:   job,
 	})
@@ -96,7 +97,7 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 
 	var req PatchJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		shared.WriteJSON(w, http.StatusBadRequest, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "error decoding request body",
 		})
@@ -130,14 +131,14 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.apiService.PatchJob(r.Context(), patch, id); err != nil {
-		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusInternalServerError, data.BasicResonse{
 			Status:  "error",
 			Message: err.Error(),
 		})
 		return
 	}
 
-	shared.WriteJSON(w, http.StatusOK, shared.BasicResonse{
+	httputils.WriteJSON(w, http.StatusOK, data.BasicResonse{
 		Status:  "success",
 		Message: "Job successfully updated",
 	})
@@ -150,7 +151,7 @@ func (h *ApiHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.apiService.DeleteJob(r.Context(), id); err != nil {
-		shared.WriteJSON(w, http.StatusInternalServerError, shared.BasicResonse{
+		httputils.WriteJSON(w, http.StatusInternalServerError, data.BasicResonse{
 			Status:  "error",
 			Message: err.Error(),
 		})
@@ -160,11 +161,40 @@ func (h *ApiHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *ApiHandler) UpdateJobStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := CheckUUID(chi.URLParam(r, "id"), w)
+	if err != nil {
+		return
+	}
+
+	var status string
+	if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
+		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
+			Status:  "error",
+			Message: "Error body decode",
+		})
+		return
+	}
+
+	if err := h.apiService.UpdateJobStatus(r.Context(), id, status); err != nil {
+		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
+			Status:  "error",
+			Message: "Failed job status update",
+		})
+		return
+	}
+
+	httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
+		Status:  "success",
+		Message: "",
+	})
+}
+
 // helper
 func CheckUUID(strId string, w http.ResponseWriter) (uuid.UUID, error) {
 	id, err := uuid.Parse(strId)
 	if err != nil {
-		shared.WriteJSON(w, 400, shared.BasicResonse{
+		httputils.WriteJSON(w, 400, data.BasicResonse{
 			Status:  "error",
 			Message: "Incorrect id type",
 		})

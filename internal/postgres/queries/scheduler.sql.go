@@ -46,3 +46,17 @@ func (q *Queries) ClaimNextJob(ctx context.Context) (uuid.UUID, error) {
 	err := row.Scan(&job_id)
 	return job_id, err
 }
+
+const resetHungMessage = `-- name: ResetHungMessage :exec
+UPDATE job_schedules
+SET
+    status = 'idle',
+    updated_at = NOW()
+WHERE status = 'active'
+  AND NOW() - last_run_at > ($1::bigint * interval '1 second')
+`
+
+func (q *Queries) ResetHungMessage(ctx context.Context, timeoutSeconds int64) error {
+	_, err := q.db.Exec(ctx, resetHungMessage, timeoutSeconds)
+	return err
+}

@@ -23,3 +23,7 @@ func NewSchedulerRepository(pool *pgxpool.Pool, q *db.Queries) *SchedulerReposit
 func (repo *SchedulerRepository) ClaimNextJob(ctx context.Context) (uuid.UUID, error) {
 	return repo.q.ClaimNextJob(ctx)
 }
+
+func (repo *SchedulerRepository) ResetHungMessage(ctx context.Context, JobDeathTimeout int64) error {
+	return repo.q.ResetHungMessage(ctx, JobDeathTimeout)
+}

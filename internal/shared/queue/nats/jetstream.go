@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	shared "github.com/flamefks/scheduler-system/internal/shared"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -20,7 +20,7 @@ func NewJetStream(backgrCtx context.Context, nc *nats.Conn) jetstream.JetStream 
 	}
 
 	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{Name: "jobs", Subjects: []string{
-		shared.JobsSubjectDeliver, shared.JobsSubjectFetcher}})
+		sharedData.JobsSubjectDeliver, sharedData.JobsSubjectFetcher}})
 	if err != nil {
 		log.Fatal(err)
 	}

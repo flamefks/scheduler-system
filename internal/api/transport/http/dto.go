@@ -3,7 +3,7 @@ package http
 import (
 	"time"
 
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 )
 
 // =========================
@@ -57,8 +57,8 @@ type PatchJobRequest struct {
 // Responses
 // =========================
 type GetJobResponse struct {
-	Status string      `json:"status"`
-	Data   *shared.Job `json:"data"`
+	Status string    `json:"status"`
+	Data   *data.Job `json:"data"`
 }
 
 type ResponseWithUUID struct {

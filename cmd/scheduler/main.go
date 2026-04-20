@@ -12,10 +12,10 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	qnats "github.com/flamefks/scheduler-system/internal/queue/nats"
 	coreConf "github.com/flamefks/scheduler-system/internal/scheduler/config"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
+	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
@@ -73,8 +73,11 @@ func main() {
 	// semaphore
 	sem := make(chan struct{}, 256)
 
+	// Bacground checker
+	go schedulerService.MonitorTasksStatuses(appCtx, coreCfg.JobDeathSecondsTimeout, coreCfg.JobPollInterval)
+
 	// Loop
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(coreCfg.JobPollInterval)
 	defer ticker.Stop()
 
 	for {

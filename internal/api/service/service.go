@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 	"github.com/google/uuid"
 
 	repo "github.com/flamefks/scheduler-system/internal/api/repository"
@@ -24,7 +24,7 @@ func NewApiService(logger *slog.Logger, r repo.PostgresRepo) *ApiService {
 	}
 }
 
-func (service *ApiService) CreateJob(ctx context.Context, job *shared.Job) (uuid.UUID, error) {
+func (service *ApiService) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
 	jobId, err := service.repo.CreateJob(ctx, job)
 	if err != nil {
 		service.logger.Error(
@@ -50,7 +50,7 @@ func (service *ApiService) DeleteJob(ctx context.Context, jobId uuid.UUID) error
 	return nil
 }
 
-func (service *ApiService) GetJobByID(ctx context.Context, jobId uuid.UUID) (*shared.Job, error) {
+func (service *ApiService) GetJobByID(ctx context.Context, jobId uuid.UUID) (*data.Job, error) {
 	j, err := service.repo.GetJobByID(ctx, jobId)
 	if err != nil {
 		service.logger.Error(
@@ -74,4 +74,18 @@ func (service *ApiService) PatchJob(ctx context.Context, patch *domain.PatchJobM
 		return fmt.Errorf("error patching job by id %s", jobId)
 	}
 	return nil
+}
+
+func (service *ApiService) UpdateJobStatus(ctx context.Context, jobId uuid.UUID, status string) error {
+	if err := service.repo.UpdateScheduleStatus(ctx, jobId, status); err != nil {
+		service.logger.Error(
+			"failed_update_job_status",
+			slog.Any("job_id", jobId),
+			slog.String("new_status", status),
+			slog.Any("error", err),
+		)
+		return err
+	}
+	return nil
+
 }

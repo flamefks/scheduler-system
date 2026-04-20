@@ -26,3 +26,6 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+          
+          -  db_type: "pg_catalog.interval"
+             go_type: "time.Duration"

@@ -6,7 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	coreConf "github.com/flamefks/scheduler-system/internal/api/config"
 	service "github.com/flamefks/scheduler-system/internal/api/service"
@@ -20,7 +23,8 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	logCfg, err := generalConf.LoadLogging("config/logging.yml")
 	if err != nil {
@@ -43,7 +47,7 @@ func main() {
 		slog.String("status", "success"),
 	)
 
-	pool, err := postgres.NewPool(ctx, coreCfg.Postgres)
+	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
 	if err != nil {
 		logger.Error(
 			"postgres_connection",
@@ -77,6 +81,19 @@ func main() {
 		"http server starting",
 		slog.String("addr", srv.Addr),
 	)
+
+	go func() {
+		<-appCtx.Done()
+
+		logger.Info("shutdown signal received")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("http server shutdown failed", "err", err)
+		}
+	}()
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("http server failed", "err", err)

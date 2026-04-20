@@ -14,8 +14,9 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	qnats "github.com/flamefks/scheduler-system/internal/queue/nats"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
+	sharedRepo "github.com/flamefks/scheduler-system/internal/shared/repository"
 	"github.com/nats-io/nats.go"
 )
 
@@ -84,7 +85,7 @@ func main() {
 
 	// service initialization
 	publisher := qnats.NewPublisher(js)
-	repository := shared.NewWorkerRepository(queries)
+	repository := sharedRepo.NewWorkerRepository(queries)
 	fetcherService := service.NewFetcherService(
 		logger,
 		publisher,
@@ -92,12 +93,12 @@ func main() {
 	)
 
 	// consumer
-	consumer := qnats.NewConsumer(js, shared.JobsSubjectFetcher)
+	consumer := qnats.NewConsumer(js, sharedData.JobsSubjectFetcher)
 
 	logger.Info("service_started")
 
 	if err := consumer.Consume(appCtx, fetcherService.PipelineHandler, fetcherService.ErrorHandler,
-		shared.FetcherGroup); err != nil {
+		sharedData.FetcherGroup); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)
 	}

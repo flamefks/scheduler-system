@@ -6,7 +6,8 @@ import (
 	"log"
 	"time"
 
-	shared "github.com/flamefks/scheduler-system/internal/shared"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -22,12 +23,12 @@ func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
 	}
 }
 
-func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, *[]byte) error,
-	errHandler func(context.Context, *[]byte) error, groupName string) error {
+func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header) error,
+	errHandler func(context.Context, []byte, nats.Header) error, groupName string) error {
 
 	initCtx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 	defer cancel()
-	stream, err := c.js.Stream(initCtx, shared.NatsStreamName)
+	stream, err := c.js.Stream(initCtx, sharedData.NatsStreamName)
 	if err != nil {
 		log.Printf("worker: stream error: %v", err)
 		return fmt.Errorf("worker: stream error: %v", err)
@@ -43,12 +44,13 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		defer cancel()
 
 		binData := msg.Data()
-		err := handler(msgCtx, &binData)
+		header := msg.Headers()
+		err := handler(msgCtx, binData, header)
 		if err != nil {
 			errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
 			defer cancelErr()
 
-			if hErr := errHandler(errCtx, &binData); hErr != nil {
+			if hErr := errHandler(errCtx, binData, header); hErr != nil {
 				return
 			}
 		}

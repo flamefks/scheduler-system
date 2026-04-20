@@ -7,7 +7,7 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,7 +29,7 @@ func NewRepository(pool *pgxpool.Pool, q *db.Queries) *Repository {
 // CREATE
 // =========================
 
-func (repo *Repository) CreateJob(ctx context.Context, job *shared.Job) (uuid.UUID, error) {
+func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
 	tx, err := repo.pool.Begin(ctx)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("begin tx: %w", err)
@@ -93,7 +93,7 @@ func (repo *Repository) CreateJob(ctx context.Context, job *shared.Job) (uuid.UU
 // GET
 // =========================
 
-func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*shared.Job, error) {
+func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job, error) {
 	jobDb, err := repo.q.GetJob(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get job: %w", err)
@@ -109,19 +109,19 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*shared.J
 		return nil, fmt.Errorf("get configs: %w", err)
 	}
 
-	var fetcher, deliver shared.IOConfig
+	var fetcher, deliver data.IOConfig
 
 	for _, c := range configs {
 		switch c.Kind {
 		case db.JobIoKindFetcher:
-			fetcher = shared.IOConfig{
+			fetcher = data.IOConfig{
 				Payload:    c.Payload,
 				HeaderAuth: c.HeaderAuth,
 				TargetUrl:  c.TargetUrl,
 				Method:     c.Method,
 			}
 		case db.JobIoKindDeliver:
-			deliver = shared.IOConfig{
+			deliver = data.IOConfig{
 				Payload:    c.Payload,
 				HeaderAuth: c.HeaderAuth,
 				TargetUrl:  c.TargetUrl,
@@ -130,11 +130,11 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*shared.J
 		}
 	}
 
-	return &shared.Job{
+	return &data.Job{
 		ID:   jobDb.ID,
 		Name: jobDb.Name,
 
-		Schedule: shared.Schedule{
+		Schedule: data.Schedule{
 			Status:            string(schedule.Status),
 			RepeatIntervalSec: schedule.RepeatIntervalSec,
 			TargetRuns:        schedule.TargetRuns,

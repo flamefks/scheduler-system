@@ -6,7 +6,7 @@ import (
 
 func ValidateCore(cfg *CoreConfig) (*CoreConfig, error) {
 	if cfg.Service.ServiceName == "" {
-		cfg.Service.ServiceName = "Api_service"
+		cfg.Service.ServiceName = "Api_Service"
 	}
 
 	if cfg.Service.Version == "" {

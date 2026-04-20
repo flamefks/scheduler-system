@@ -1,4 +1,4 @@
-package shared
+package data
 
 import (
 	"time"
@@ -33,9 +33,4 @@ type Job struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
-}
-
-type NatsWorkerMessage struct {
-	JobId                uuid.UUID `json:"job_id"`
-	ExternalResourceData Response  `json:"external_resource_data"`
 }

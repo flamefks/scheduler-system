@@ -5,9 +5,9 @@ import (
 )
 
 type CoreConfig struct {
-	Service  generalConf.ServiceSection
-	Postgres *generalConf.PostgresSection
+	Service  generalConf.ServiceSection   `yaml:"service" json:"service"`
+	Postgres *generalConf.PostgresSection `yaml:"database" json:"database"`
 	Nats     struct {
-		Url string
-	}
+		Url string `yaml:"url" json:"url"`
+	} `yaml:"nats" json:"nats"`
 }
