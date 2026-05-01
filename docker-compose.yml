@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scheduler-postgres
+    environment:
+      POSTGRES_USER: scheduler
+      POSTGRES_PASSWORD: scheduler
+      POSTGRES_DB: scheduler_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - scheduler_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: scheduler-nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - scheduler_nats_data:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CMD_PATH: ./cmd/api
+    container_name: scheduler-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HTTP_HOST: "0.0.0.0"
+      HTTP_PORT: "8080"
+      POSTGRES_DSN: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+      LOG_LEVEL: "debug"
+      LOG_FORMAT: "json"
+      LOG_OUTPUT: "stdout"
+    ports:
+      - "8080:8080"
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CMD_PATH: ./cmd/scheduler
+    container_name: scheduler-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    environment:
+      POSTGRES_DSN: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+      NATS_URL: "nats://nats:4222"
+      NATS_FETCH_SUBJECT: "jobs.fetch"
+      LOG_LEVEL: "debug"
+      LOG_FORMAT: "json"
+      LOG_OUTPUT: "stdout"
+
+  fetcher-worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CMD_PATH: ./cmd/fetcher-worker
+    container_name: scheduler-fetcher
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      NATS_URL: "nats://nats:4222"
+      NATS_FETCH_SUBJECT: "jobs.fetch"
+      NATS_DELIVERY_SUBJECT: "jobs.delivery"
+      LOG_LEVEL: "debug"
+      LOG_FORMAT: "json"
+      LOG_OUTPUT: "stdout"
+
+  delivery-worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        CMD_PATH: ./cmd/delivery-worker
+    container_name: scheduler-delivery
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      NATS_URL: "nats://nats:4222"
+      NATS_DELIVERY_SUBJECT: "jobs.delivery"
+      LOG_LEVEL: "debug"
+      LOG_FORMAT: "json"
+      LOG_OUTPUT: "stdout"
+
+volumes:
+  scheduler_pg_data:
+  scheduler_nats_data:
+  

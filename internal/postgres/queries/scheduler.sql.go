@@ -60,3 +60,16 @@ func (q *Queries) ResetHungMessage(ctx context.Context, timeoutSeconds int64) er
 	_, err := q.db.Exec(ctx, resetHungMessage, timeoutSeconds)
 	return err
 }
+
+const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :exec
+UPDATE job_schedules
+SET
+    status = 'disabled'
+WHERE status = 'idle'
+    AND done_runs = target_runs
+`
+
+func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, switchToDisabledIfNeed)
+	return err
+}

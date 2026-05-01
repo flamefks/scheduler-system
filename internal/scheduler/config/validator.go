@@ -19,13 +19,22 @@ func ValidateCore(cfg *CoreConfig) (*CoreConfig, error) {
 		cfg.Nats.Url = nats.DefaultURL
 	}
 
-	if cfg.JobPollInterval == 0 {
-		cfg.JobPollInterval = 500 * time.Millisecond
+	if cfg.GetJobPollInterval == 0 {
+		cfg.GetJobPollInterval = 500 * time.Millisecond
 	}
 
-	if cfg.JobDeathSecondsTimeout == 0 {
-		cfg.JobDeathSecondsTimeout = 900
+	if cfg.BackgroundTasks.HungJobsMonitor.PollInterval == 0 {
+		cfg.BackgroundTasks.HungJobsMonitor.PollInterval = 500 * time.Millisecond
 	}
+
+	if cfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout == 0 {
+		cfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout = 900
+	}
+
+	if cfg.BackgroundTasks.DisableJobsMonitor.PollInterval == 0 {
+		cfg.BackgroundTasks.DisableJobsMonitor.PollInterval = 500 * time.Millisecond
+	}
+
 	return cfg, nil
 
 }

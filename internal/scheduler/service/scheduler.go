@@ -13,10 +13,10 @@ import (
 type SchedulerService struct {
 	logger    *slog.Logger
 	repo      repo.PostgresRepo
-	publisher *qpublsher.Publisher
+	publisher qpublsher.AbstractPublisher
 }
 
-func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p *qpublsher.Publisher) *SchedulerService {
+func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p qpublsher.AbstractPublisher) *SchedulerService {
 	return &SchedulerService{
 		logger:    logger,
 		repo:      r,
@@ -56,8 +56,8 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 	}
 }
 
-func (s *SchedulerService) MonitorTasksStatuses(parentCtx context.Context,
-	JobDeathTimeout int64, pollInterval time.Duration) {
+func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
+	JobDeathTimeout int, pollInterval time.Duration) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
@@ -73,7 +73,35 @@ func (s *SchedulerService) MonitorTasksStatuses(parentCtx context.Context,
 			err := s.repo.ResetHungMessage(dbCtx, JobDeathTimeout)
 			stop()
 			if err != nil {
-				s.logger.Error("reset_hung_message", "status", "error", "msg", err)
+				s.logger.Error(
+					"reset_hung_message",
+					slog.String("status", "error"),
+					slog.Any("msg", err),
+				)
+			}
+		}
+	}
+}
+
+func (s *SchedulerService) MonitorDisabledTasks(parentCtx context.Context, pollInterval time.Duration) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			dbCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			err := s.repo.SwitchToDisabledIfNeed(dbCtx)
+			stop()
+			if err != nil {
+				s.logger.Error(
+					"reset_hung_message",
+					slog.String("status", "error"),
+					slog.Any("msg", err),
+				)
 			}
 		}
 	}

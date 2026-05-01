@@ -17,8 +17,8 @@ type ScheduleBlockCreateJobRequest struct {
 }
 
 type IOBlockCreateJobRequest struct {
-	Payload    []byte `json:"payload"`
-	HeaderAuth []byte `json:"header_auth"`
+	Payload []byte `json:"payload"`
+	Headers []byte `json:"headers"`
 }
 
 type CreateJobRequest struct {
@@ -41,8 +41,8 @@ type ScheduleBlockPatchJobRequest struct {
 }
 
 type IOBlockPatchJobRequest struct {
-	Payload    *[]byte `json:"payload"`
-	HeaderAuth *[]byte `json:"header_auth"`
+	Payload *[]byte `json:"payload"`
+	Headers *[]byte `json:"headers"`
 }
 
 type PatchJobRequest struct {
@@ -51,6 +51,11 @@ type PatchJobRequest struct {
 
 	FetcherConfig *IOBlockPatchJobRequest `json:"fetcher_config"`
 	DeliverConfig *IOBlockPatchJobRequest `json:"deliver_config"`
+}
+
+// UpdateStatusJob
+type UpdateStatusRequest struct {
+	Status string `json:"status"`
 }
 
 // =========================

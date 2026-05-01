@@ -12,6 +12,20 @@ type CoreConfig struct {
 	Nats     struct {
 		Url string `yaml:"url" json:"url"`
 	} `yaml:"nats" json:"nats"`
-	JobDeathSecondsTimeout int64         `yaml:"job_death_seconds_timeout" json:"job_death_seconds_timeout"`
-	JobPollInterval        time.Duration `yaml:"job_poll_interval" json:"job_poll_interval"`
+	BackgroundTasks    BackgroundTasksSection `yaml:"background_tasks" json:"background_tasks"`
+	GetJobPollInterval time.Duration          `yaml:"get_job_poll_interval" json:"poll_interval"`
+}
+
+type BackgroundTasksSection struct {
+	HungJobsMonitor    HungJobsMonitorSection    `yaml:"hung_jobs_monitor" json:"hung_jobs_monitor"`
+	DisableJobsMonitor DisableJobsMonitorSection `yaml:"disable_jobs_monitor" json:"disable_jobs_monitor"`
+}
+
+type HungJobsMonitorSection struct {
+	PollInterval           time.Duration `yaml:"poll_interval" json:"poll_interval"`
+	JobDeathSecondsTimeout int           `yaml:"job_death_seconds_timeout" json:"job_death_seconds_timeout"`
+}
+
+type DisableJobsMonitorSection struct {
+	PollInterval time.Duration `yaml:"poll_interval" json:"poll_interval"`
 }

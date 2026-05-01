@@ -40,7 +40,7 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 	}
 
 	cc, err := consumer.Consume(func(msg jetstream.Msg) {
-		msgCtx, cancel := context.WithTimeout(appCtx, 10*time.Minute)
+		msgCtx, cancel := context.WithTimeout(appCtx, 2*time.Hour)
 		defer cancel()
 
 		binData := msg.Data()

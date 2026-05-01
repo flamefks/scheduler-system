@@ -32,4 +32,11 @@ SET
     status = 'idle',
     updated_at = NOW()
 WHERE status = 'active'
-  AND NOW() - last_run_at > (sqlc.arg(timeout_seconds)::bigint * interval '1 second')
+  AND NOW() - last_run_at > (sqlc.arg(timeout_seconds)::bigint * interval '1 second');
+
+-- name: SwitchToDisabledIfNeed :exec
+UPDATE job_schedules
+SET
+    status = 'disabled'
+WHERE status = 'idle'
+    AND done_runs = target_runs;

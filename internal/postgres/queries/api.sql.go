@@ -44,7 +44,7 @@ INSERT INTO job_io_configs (
     job_id,
     kind,
     payload,
-    header_auth,
+    headers,
     target_url,
     method
 ) VALUES (
@@ -53,12 +53,12 @@ INSERT INTO job_io_configs (
 `
 
 type CreateJobIOConfigParams struct {
-	JobID      uuid.UUID
-	Kind       JobIoKind
-	Payload    []byte
-	HeaderAuth []byte
-	TargetUrl  string
-	Method     string
+	JobID     uuid.UUID
+	Kind      JobIoKind
+	Payload   []byte
+	Headers   []byte
+	TargetUrl string
+	Method    string
 }
 
 // =========================
@@ -69,7 +69,7 @@ func (q *Queries) CreateJobIOConfig(ctx context.Context, arg CreateJobIOConfigPa
 		arg.JobID,
 		arg.Kind,
 		arg.Payload,
-		arg.HeaderAuth,
+		arg.Headers,
 		arg.TargetUrl,
 		arg.Method,
 	)
@@ -178,7 +178,7 @@ SELECT
     job_id,
     kind,
     payload,
-    header_auth,
+    headers,
     target_url,
     method
 FROM job_io_configs
@@ -186,12 +186,12 @@ WHERE job_id = $1
 `
 
 type ListJobIOConfigsRow struct {
-	JobID      uuid.UUID
-	Kind       JobIoKind
-	Payload    []byte
-	HeaderAuth []byte
-	TargetUrl  string
-	Method     string
+	JobID     uuid.UUID
+	Kind      JobIoKind
+	Payload   []byte
+	Headers   []byte
+	TargetUrl string
+	Method    string
 }
 
 func (q *Queries) ListJobIOConfigs(ctx context.Context, jobID uuid.UUID) ([]ListJobIOConfigsRow, error) {
@@ -207,7 +207,7 @@ func (q *Queries) ListJobIOConfigs(ctx context.Context, jobID uuid.UUID) ([]List
 			&i.JobID,
 			&i.Kind,
 			&i.Payload,
-			&i.HeaderAuth,
+			&i.Headers,
 			&i.TargetUrl,
 			&i.Method,
 		); err != nil {
@@ -230,9 +230,9 @@ SET
     END,
     target_url = COALESCE($3, target_url),
     method = COALESCE($4, method),
-    header_auth = CASE
+    headers = CASE
         WHEN $5::bool THEN $6
-        ELSE header_auth
+        ELSE headers
     END
 WHERE job_id = $7
   AND kind = $8::job_io_kind
@@ -240,14 +240,14 @@ RETURNING job_id
 `
 
 type PatchJobIOConfigParams struct {
-	SetPayload    bool
-	Payload       []byte
-	TargetUrl     *string
-	Method        *string
-	SetHeaderAuth bool
-	HeaderAuth    []byte
-	JobID         uuid.UUID
-	Kind          JobIoKind
+	SetPayload bool
+	Payload    []byte
+	TargetUrl  *string
+	Method     *string
+	SetHeaders bool
+	Headers    []byte
+	JobID      uuid.UUID
+	Kind       JobIoKind
 }
 
 func (q *Queries) PatchJobIOConfig(ctx context.Context, arg PatchJobIOConfigParams) (uuid.UUID, error) {
@@ -256,8 +256,8 @@ func (q *Queries) PatchJobIOConfig(ctx context.Context, arg PatchJobIOConfigPara
 		arg.Payload,
 		arg.TargetUrl,
 		arg.Method,
-		arg.SetHeaderAuth,
-		arg.HeaderAuth,
+		arg.SetHeaders,
+		arg.Headers,
 		arg.JobID,
 		arg.Kind,
 	)

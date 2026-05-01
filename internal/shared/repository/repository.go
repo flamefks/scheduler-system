@@ -33,8 +33,8 @@ func (repo *WorkerRepository) GetConfig(ctx context.Context, kind string, jobId 
 		return nil, fmt.Errorf("failed get JobIoConfig: %w", err)
 	}
 	return &data.IOConfig{
-		Payload:    ioConfig.Payload,
-		HeaderAuth: ioConfig.HeaderAuth,
+		Payload: ioConfig.Payload,
+		Headers: ioConfig.Headers,
 	}, nil
 }
 

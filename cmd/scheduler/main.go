@@ -73,11 +73,14 @@ func main() {
 	// semaphore
 	sem := make(chan struct{}, 256)
 
-	// Bacground checker
-	go schedulerService.MonitorTasksStatuses(appCtx, coreCfg.JobDeathSecondsTimeout, coreCfg.JobPollInterval)
+	// Bacground checkers
+	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout,
+		coreCfg.BackgroundTasks.HungJobsMonitor.PollInterval)
+
+	go schedulerService.MonitorDisabledTasks(appCtx, coreCfg.BackgroundTasks.DisableJobsMonitor.PollInterval)
 
 	// Loop
-	ticker := time.NewTicker(coreCfg.JobPollInterval)
+	ticker := time.NewTicker(coreCfg.GetJobPollInterval)
 	defer ticker.Stop()
 
 	for {

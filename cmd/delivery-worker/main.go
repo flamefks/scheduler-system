@@ -39,7 +39,7 @@ func main() {
 	logger.Info("logger_init", "status", "success")
 
 	// core config
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
 	if err != nil {
 		logger.Error("core_config_initialization",
 			slog.String("status", "error"),
@@ -95,7 +95,7 @@ func main() {
 
 	logger.Info("service_started")
 
-	if err := consumer.Consume(appCtx, schedulerService.PipelineHandler, schedulerService.ErrorHandler,
+	if err := consumer.Consume(appCtx, schedulerService.PipelineHandler, schedulerService.HandleError,
 		sharedData.FetcherGroup); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)

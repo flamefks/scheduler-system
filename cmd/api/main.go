@@ -32,7 +32,7 @@ func main() {
 	}
 	log.Printf("Logging config successfully parsed: %v", logCfg)
 
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -16,10 +16,10 @@ type PatchScheduleModel struct {
 }
 
 type PatchIOConfig struct {
-	Payload    *[]byte
-	HeaderAuth *[]byte
-	TargetUrl  *string
-	Method     *string
+	Payload   *[]byte
+	Headers   *[]byte
+	TargetUrl *string
+	Method    *string
 }
 
 type PatchJobModel struct {

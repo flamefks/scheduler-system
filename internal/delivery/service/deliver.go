@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flamefks/scheduler-system/internal/delivery/client"
+	coreConf "github.com/flamefks/scheduler-system/internal/delivery/config"
 	"github.com/flamefks/scheduler-system/internal/delivery/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -29,7 +30,8 @@ func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo) *Deliv
 	}
 }
 
-func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) error {
+func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) (error, int) {
+
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := utils.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -38,7 +40,7 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return err
+		return err, 0
 	}
 
 	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
@@ -51,17 +53,17 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err
+		return err, 0
 	}
 
 	var headerMap map[string]string
-	if err := json.Unmarshal(reqConfig.HeaderAuth, &headerMap); err != nil {
+	if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
 		ds.logger.Error(
 			"failed_unmarshal_config_header",
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err
+		return err, 0
 	}
 
 	request := &data.Request{
@@ -78,16 +80,17 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err
-	}
-	if response.StatusCode != 200 {
-		return fmt.Errorf("Got not 2xx code!")
+		return err, 0
 	}
 
-	return nil
+	err = ds.repo.SetJobStatus(ctx, "idle", jobId)
+	if err != nil {
+		return err, 0
+	}
+	return nil, response.StatusCode
 }
 
-func (f *DeliverService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) error {
+func (f *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := utils.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -100,4 +103,43 @@ func (f *DeliverService) ErrorHandler(ctx context.Context, binData []byte, natsH
 	}
 
 	return f.repo.SetJobStatus(ctx, "error", jobId)
+}
+
+func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) error {
+	config := coreConf.GetCoreConfig().HttpRetry
+
+	for attempt := 0; attempt < config.MaxAttempts; attempt++ {
+		select {
+		case <-parentCtx.Done():
+			return parentCtx.Err()
+		default:
+		}
+
+		err, statusCode := ds.Handle(parentCtx, binNatsMsg, natsHeader)
+		if err == nil && !utils.InSlice(config.RetryOnStatus, statusCode) {
+			return nil
+		}
+
+		ds.logger.Warn(
+			"pipeline_handler_failed",
+			slog.Int("attempt", attempt),
+			slog.Int("http_status_code", statusCode),
+			slog.Any("error", err),
+		)
+
+		if !config.RetryOnError || attempt == config.MaxAttempts-1 {
+			return err
+		}
+
+		delay := utils.BackoffDuration(attempt, config.BaseDelay, config.MaxDelay)
+		ds.logger.Debug("waiting before retry", slog.Duration("delay", delay))
+
+		select {
+		case <-time.After(delay):
+		case <-parentCtx.Done():
+			return parentCtx.Err()
+		}
+	}
+
+	return fmt.Errorf("max retries exceeded")
 }

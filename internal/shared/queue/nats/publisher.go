@@ -7,6 +7,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+type AbstractPublisher interface {
+	Publish(ctx context.Context, subject string, payload []byte, headers map[string]string) error
+}
+
 type Publisher struct {
 	js jetstream.JetStream
 }

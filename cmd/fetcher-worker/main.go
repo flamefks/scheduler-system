@@ -39,7 +39,7 @@ func main() {
 	logger.Info("logger_init", "status", "success")
 
 	// core config
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
 	if err != nil {
 		logger.Error("core_config_initialization",
 			slog.String("status", "error"),

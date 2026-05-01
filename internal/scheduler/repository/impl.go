@@ -24,6 +24,10 @@ func (repo *SchedulerRepository) ClaimNextJob(ctx context.Context) (uuid.UUID, e
 	return repo.q.ClaimNextJob(ctx)
 }
 
-func (repo *SchedulerRepository) ResetHungMessage(ctx context.Context, JobDeathTimeout int64) error {
-	return repo.q.ResetHungMessage(ctx, JobDeathTimeout)
+func (repo *SchedulerRepository) ResetHungMessage(ctx context.Context, JobDeathTimeout int) error {
+	return repo.q.ResetHungMessage(ctx, int64(JobDeathTimeout))
+}
+
+func (repo *SchedulerRepository) SwitchToDisabledIfNeed(ctx context.Context) error {
+	return repo.q.SwitchToDisabledIfNeed(ctx)
 }

@@ -7,10 +7,10 @@ import (
 )
 
 type IOConfig struct {
-	Payload    []byte
-	HeaderAuth []byte
-	TargetUrl  string
-	Method     string
+	Payload   []byte
+	Headers   []byte
+	TargetUrl string
+	Method    string
 }
 
 type Schedule struct {

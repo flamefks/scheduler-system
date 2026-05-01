@@ -42,12 +42,12 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 			LastRunAt:         nil,
 		},
 		FetcherConfig: data.IOConfig{
-			Payload:    req.FetcherConfig.Payload,
-			HeaderAuth: req.FetcherConfig.HeaderAuth,
+			Payload: req.FetcherConfig.Payload,
+			Headers: req.FetcherConfig.Headers,
 		},
 		DeliverConfig: data.IOConfig{
-			Payload:    req.DeliverConfig.Payload,
-			HeaderAuth: req.DeliverConfig.HeaderAuth,
+			Payload: req.DeliverConfig.Payload,
+			Headers: req.DeliverConfig.Headers,
 		},
 	}
 
@@ -118,15 +118,15 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 
 	if req.FetcherConfig != nil {
 		patch.FetcherConfig = &domain.PatchIOConfig{
-			Payload:    req.FetcherConfig.Payload,
-			HeaderAuth: req.FetcherConfig.HeaderAuth,
+			Payload: req.FetcherConfig.Payload,
+			Headers: req.FetcherConfig.Headers,
 		}
 	}
 
 	if req.DeliverConfig != nil {
 		patch.DeliverConfig = &domain.PatchIOConfig{
-			Payload:    req.DeliverConfig.Payload,
-			HeaderAuth: req.DeliverConfig.HeaderAuth,
+			Payload: req.DeliverConfig.Payload,
+			Headers: req.DeliverConfig.Headers,
 		}
 	}
 
@@ -167,8 +167,8 @@ func (h *ApiHandler) UpdateJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var status string
-	if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
+	var req UpdateStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "Error body decode",
@@ -176,7 +176,7 @@ func (h *ApiHandler) UpdateJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.apiService.UpdateJobStatus(r.Context(), id, status); err != nil {
+	if err := h.apiService.UpdateJobStatus(r.Context(), id, req.Status); err != nil {
 		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "Failed job status update",
@@ -184,7 +184,7 @@ func (h *ApiHandler) UpdateJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
+	httputils.WriteJSON(w, http.StatusOK, data.BasicResonse{
 		Status:  "success",
 		Message: "",
 	})

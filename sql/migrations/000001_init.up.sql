@@ -48,7 +48,7 @@ CREATE TABLE job_io_configs (
     kind job_io_kind NOT NULL,
 
     payload JSONB NOT NULL,
-    header_auth JSONB NULL,
+    headers JSONB NULL,
     target_url TEXT NOT NULL,
     method TEXT NOT NULL,
 

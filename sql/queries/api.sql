@@ -102,7 +102,7 @@ INSERT INTO job_io_configs (
     job_id,
     kind,
     payload,
-    header_auth,
+    headers,
     target_url,
     method
 ) VALUES (
@@ -118,9 +118,9 @@ SET
     END,
     target_url = COALESCE(sqlc.narg(target_url), target_url),
     method = COALESCE(sqlc.narg(method), method),
-    header_auth = CASE
-        WHEN sqlc.arg(set_header_auth)::bool THEN sqlc.narg(header_auth)
-        ELSE header_auth
+    headers = CASE
+        WHEN sqlc.arg(set_headers)::bool THEN sqlc.narg(headers)
+        ELSE headers
     END
 WHERE job_id = sqlc.arg(job_id)
   AND kind = sqlc.arg(kind)::job_io_kind
@@ -131,7 +131,7 @@ SELECT
     job_id,
     kind,
     payload,
-    header_auth,
+    headers,
     target_url,
     method
 FROM job_io_configs
