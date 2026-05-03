@@ -13,7 +13,7 @@ func main() {
 	dsn := os.Getenv("DATABASE_URL")
 
 	m, err := migrate.New(
-		"file:///app/migrations",
+		"file:///app/sql/migrations",
 		dsn,
 	)
 	if err != nil {

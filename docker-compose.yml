@@ -133,11 +133,10 @@ services:
       scheduler:
         condition: service_started
     volumes:
-      - ./configs/delivery.yml:/app/config/core.yml:ro
+      - ./configs/deliver.yml:/app/config/core.yml:ro
       - ./configs/logging.yml:/app/config/logging.yml:ro
       - ./logs/delivery:/app/logs
 
 volumes:
   scheduler_pg_data:
   scheduler_nats_data:
-  
