@@ -19,7 +19,7 @@ func NewJetStream(backgrCtx context.Context, nc *nats.Conn) jetstream.JetStream 
 		log.Fatal(err)
 	}
 
-	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{Name: "jobs", Subjects: []string{
+	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{Name: sharedData.NatsStreamName, Subjects: []string{
 		sharedData.JobsSubjectDeliver, sharedData.JobsSubjectFetcher}})
 	if err != nil {
 		log.Fatal(err)
