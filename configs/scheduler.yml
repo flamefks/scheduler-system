@@ -1,0 +1,20 @@
+database:
+  dsn: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+  max_conns: 5
+  min_conns: 1
+  max_conn_lifetime: 1h
+  max_conn_idle_time: 15m
+  health_check_period: 1m
+
+nats:
+  url: "nats://nats:4222"
+
+background_tasks:
+  hung_jobs_monitor:
+    poll_interval: 5m
+    job_death_seconds_timeout: 5400
+
+  disable_jobs_monitor:
+    poll_interval: 1m
+
+get_job_poll_interval: 1s

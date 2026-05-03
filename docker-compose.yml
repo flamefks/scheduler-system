@@ -2,14 +2,14 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: scheduler-postgres
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: scheduler
       POSTGRES_PASSWORD: scheduler
       POSTGRES_DB: scheduler_db
-    ports:
-      - "5432:5432"
     volumes:
-      - scheduler_pg_data:/var/lib/postgresql/data
+      - /opt/scheduler/data/db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler_db"]
       interval: 5s
@@ -19,37 +19,34 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: scheduler-nats
-    command: ["-js", "-m", "8222"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
     ports:
       - "4222:4222"
       - "8222:8222"
     volumes:
-      - scheduler_nats_data:/data
+      - /opt/scheduler/data/nats:/data
 
   api:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/api
     container_name: scheduler-api
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      HTTP_HOST: "0.0.0.0"
-      HTTP_PORT: "8080"
-      POSTGRES_DSN: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
-      LOG_LEVEL: "debug"
-      LOG_FORMAT: "json"
-      LOG_OUTPUT: "stdout"
+      nats:
+        condition: service_started
     ports:
       - "8080:8080"
+    volumes:
+      - ./configs/api.yml:/app/config/core.yaml:ro
 
   scheduler:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/scheduler
     container_name: scheduler-scheduler
@@ -58,50 +55,35 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
-    environment:
-      POSTGRES_DSN: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
-      NATS_URL: "nats://nats:4222"
-      NATS_FETCH_SUBJECT: "jobs.fetch"
-      LOG_LEVEL: "debug"
-      LOG_FORMAT: "json"
-      LOG_OUTPUT: "stdout"
+    volumes:
+      - ./configs/scheduler.yml:/app/config/core.yaml:ro
 
   fetcher-worker:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/fetcher-worker
     container_name: scheduler-fetcher
     depends_on:
+      scheduler:
+        condition: service_started
       nats:
         condition: service_started
-    environment:
-      NATS_URL: "nats://nats:4222"
-      NATS_FETCH_SUBJECT: "jobs.fetch"
-      NATS_DELIVERY_SUBJECT: "jobs.delivery"
-      LOG_LEVEL: "debug"
-      LOG_FORMAT: "json"
-      LOG_OUTPUT: "stdout"
+    volumes:
+      - ./configs/fetcher.yml:/app/config/core.yaml:ro
 
   delivery-worker:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/delivery-worker
     container_name: scheduler-delivery
     depends_on:
+      scheduler:
+        condition: service_started
       nats:
         condition: service_started
-    environment:
-      NATS_URL: "nats://nats:4222"
-      NATS_DELIVERY_SUBJECT: "jobs.delivery"
-      LOG_LEVEL: "debug"
-      LOG_FORMAT: "json"
-      LOG_OUTPUT: "stdout"
-
-volumes:
-  scheduler_pg_data:
-  scheduler_nats_data:
-  
+    volumes:
+      - ./configs/delivery.yml:/app/config/core.yaml:ro
