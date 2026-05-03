@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/golang-migrate/migrate/v4"
-	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -70,7 +70,7 @@ func setupBenchRepo(b *testing.B) *benchDB {
 		b.Fatalf("failed to ping db: %v", err)
 	}
 
-	if err := runBenchMigrations(pool); err != nil {
+	if err := runBenchMigrations(connStr); err != nil {
 		pool.Close()
 		_ = pgContainer.Terminate(ctx)
 		b.Fatalf("failed to run migrations: %v", err)
@@ -92,24 +92,18 @@ func setupBenchRepo(b *testing.B) *benchDB {
 	}
 }
 
-func runBenchMigrations(pool *pgxpool.Pool) error {
+func runBenchMigrations(connStr string) error {
 	wd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
 	projectRoot := filepath.Clean(filepath.Join(wd, "../../.."))
-	migrationsPath := filepath.Join(projectRoot, "migrations")
+	migrationsPath := filepath.Join(projectRoot, "sql", "migrations")
 
-	driver, err := migratepgx.WithInstance(pool, &migratepgx.Config{})
-	if err != nil {
-		return fmt.Errorf("migrate driver: %w", err)
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
+	m, err := migrate.New(
 		"file://"+migrationsPath,
-		"postgres",
-		driver,
+		connStr,
 	)
 	if err != nil {
 		return fmt.Errorf("new migrate: %w", err)
@@ -157,6 +151,7 @@ func seedJobForBench(b *testing.B, repo *Repository, name string) uuid.UUID {
 	if id == uuid.Nil {
 		b.Fatal("seed returned nil uuid")
 	}
+
 	return id
 }
 

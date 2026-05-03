@@ -18,7 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/golang-migrate/migrate/v4"
-	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -61,7 +61,6 @@ func setupTestRepo(t *testing.T) *testDB {
 		t.Fatalf("failed to create pgx pool: %v", err)
 	}
 
-	// Убедимся, что БД отвечает
 	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -71,7 +70,7 @@ func setupTestRepo(t *testing.T) *testDB {
 		t.Fatalf("failed to ping db: %v", err)
 	}
 
-	if err := runMigrations(pool, connStr); err != nil {
+	if err := runMigrations(connStr); err != nil {
 		pool.Close()
 		_ = pgContainer.Terminate(ctx)
 		t.Fatalf("failed to run migrations: %v", err)
@@ -93,27 +92,18 @@ func setupTestRepo(t *testing.T) *testDB {
 	}
 }
 
-func runMigrations(pool *pgxpool.Pool, connStr string) error {
+func runMigrations(connStr string) error {
 	wd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
-	// Подстрой под свой проект.
-	// Например, если тест лежит в internal/api/repository,
-	// а миграции в корне проекта ./migrations:
 	projectRoot := filepath.Clean(filepath.Join(wd, "../../.."))
-	migrationsPath := filepath.Join(projectRoot, "migrations")
+	migrationsPath := filepath.Join(projectRoot, "sql", "migrations")
 
-	driver, err := migratepgx.WithInstance(pool, &migratepgx.Config{})
-	if err != nil {
-		return fmt.Errorf("migrate driver: %w", err)
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
+	m, err := migrate.New(
 		"file://"+migrationsPath,
-		"postgres",
-		driver,
+		connStr,
 	)
 	if err != nil {
 		return fmt.Errorf("new migrate: %w", err)
@@ -384,8 +374,6 @@ func TestRepository_PatchJob_DeliverConfig_Integration(t *testing.T) {
 		t.Fatalf("GetJobByID error: %v", err)
 	}
 
-	// Этот тест сейчас, скорее всего, упадёт,
-	// потому что в твоём коде DeliverConfig патчится с KindFetcher.
 	if string(got.DeliverConfig.Payload) != string(newDeliverPayload) {
 		t.Fatalf("expected deliver payload %s, got %s", string(newDeliverPayload), string(got.DeliverConfig.Payload))
 	}
