@@ -85,7 +85,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Drain()
-	js := qnats.ConnectJetStream(appCtx, nc)
+	js, err := qnats.ConnectJetStream(nc)
+	if err != nil {
+		log.Fatalf("Error connecting stream: %v", err)
+	}
 
 	logger.Info("nats_connection",
 		slog.String("status", "success"),
