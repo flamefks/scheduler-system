@@ -2,7 +2,7 @@ test:
 	go test ./internal/...
 
 test-integration:
-	go test -tags=integration ./internal/...
+	go test ./internal/... -tags=integration 
 
 bench:
-	go test -bench=. -benchmem -run=^$ ./internal/...
+	go test ./internal/... -tags=integration -bench=. -benchmem -run=^$

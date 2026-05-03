@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: scheduler
       POSTGRES_DB: scheduler_db
     volumes:
-      - /opt/scheduler/data/db:/var/lib/postgresql/data
+      - scheduler_pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler_db"]
       interval: 5s
@@ -24,14 +24,15 @@ services:
       - "4222:4222"
       - "8222:8222"
     volumes:
-      - /opt/scheduler/data/nats:/data
+      - scheduler_nats_data:/data
 
   api:
     build:
-      context: ..
+      context: .
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/api
+        CONFIG_NAME: api.yml
     container_name: scheduler-api
     depends_on:
       postgres:
@@ -41,14 +42,17 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./configs/api.yml:/app/config/core.yaml:ro
+      - ./configs/api.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/api:/app/logs
 
   scheduler:
     build:
-      context: ..
+      context: .
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/scheduler
+        CONFIG_NAME: scheduler.yml
     container_name: scheduler-scheduler
     depends_on:
       postgres:
@@ -56,14 +60,17 @@ services:
       nats:
         condition: service_started
     volumes:
-      - ./configs/scheduler.yml:/app/config/core.yaml:ro
+      - ./configs/scheduler.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/scheduler:/app/logs
 
   fetcher-worker:
     build:
-      context: ..
+      context: .
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/fetcher-worker
+        CONFIG_NAME: fetcher.yml
     container_name: scheduler-fetcher
     depends_on:
       scheduler:
@@ -71,14 +78,17 @@ services:
       nats:
         condition: service_started
     volumes:
-      - ./configs/fetcher.yml:/app/config/core.yaml:ro
+      - ./configs/fetcher.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/fetcher:/app/logs
 
   delivery-worker:
     build:
-      context: ..
+      context: .
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/delivery-worker
+        CONFIG_NAME: deliver.yml
     container_name: scheduler-delivery
     depends_on:
       scheduler:
@@ -86,4 +96,11 @@ services:
       nats:
         condition: service_started
     volumes:
-      - ./configs/delivery.yml:/app/config/core.yaml:ro
+      - ./configs/delivery.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/delivery:/app/logs
+
+volumes:
+  scheduler_pg_data:
+  scheduler_nats_data:
+  
