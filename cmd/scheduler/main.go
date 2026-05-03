@@ -18,6 +18,7 @@ import (
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -29,7 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Logging config successfully parsed")
+	b, err := yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Logging config successfully parsed: %v", b)
 
 	// logger
 	logger, err := logging.NewLogger(logCfg)
@@ -43,7 +48,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Core config successfully parsed: %v", b)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)

@@ -14,6 +14,7 @@ import (
 	coreConf "github.com/flamefks/scheduler-system/internal/api/config"
 	service "github.com/flamefks/scheduler-system/internal/api/service"
 	apiHttp "github.com/flamefks/scheduler-system/internal/api/transport/http"
+	"gopkg.in/yaml.v3"
 
 	dbRepo "github.com/flamefks/scheduler-system/internal/api/repository"
 	generalConf "github.com/flamefks/scheduler-system/internal/config"
@@ -30,13 +31,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Logging config successfully parsed")
+	b, err := yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Logging config successfully parsed: %v", b)
 
 	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Core config successfully parsed: %v", b)
 
 	logger, err := logging.NewLogger(logCfg)
 	if err != nil {
