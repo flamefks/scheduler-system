@@ -29,7 +29,7 @@ services:
     environment:
       DATABASE_URL: postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable
     volumes:
-      - ./migrations:/app/migrations:ro
+      - ./sql/migrations:/app/migrations:ro
     restart: "no"
 
   nats:
