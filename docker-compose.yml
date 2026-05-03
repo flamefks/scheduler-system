@@ -16,6 +16,22 @@ services:
       timeout: 3s
       retries: 10
 
+  postgres-migrate:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/postgres-migrate
+    container_name: scheduler-postgres-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable
+    volumes:
+      - ./migrations:/app/migrations:ro
+    restart: "no"
+
   nats:
     image: nats:2.10-alpine
     container_name: scheduler-nats
@@ -41,6 +57,8 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    environment:
+      NATS_URL: nats://nats:4222
     restart: "no"
 
   api:
@@ -51,8 +69,8 @@ services:
         CMD_PATH: ./cmd/api
     container_name: scheduler-api
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
       nats-init:
         condition: service_completed_successfully
     ports:
@@ -70,8 +88,8 @@ services:
         CMD_PATH: ./cmd/scheduler
     container_name: scheduler-scheduler
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
       nats-init:
         condition: service_completed_successfully
       api:
@@ -89,6 +107,8 @@ services:
         CMD_PATH: ./cmd/fetcher-worker
     container_name: scheduler-fetcher
     depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
       nats-init:
         condition: service_completed_successfully
       scheduler:
@@ -106,6 +126,8 @@ services:
         CMD_PATH: ./cmd/delivery-worker
     container_name: scheduler-delivery
     depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
       nats-init:
         condition: service_completed_successfully
       scheduler:

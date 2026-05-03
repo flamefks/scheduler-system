@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -11,9 +12,11 @@ import (
 )
 
 func main() {
+	url := os.Getenv("NATS_URL")
+
 	ctx := context.Background()
 
-	nc, err := nats.Connect("nats://nats:4222")
+	nc, err := nats.Connect(url)
 	if err != nil {
 		log.Fatal(err)
 	}
