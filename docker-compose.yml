@@ -25,6 +25,23 @@ services:
       - "8222:8222"
     volumes:
       - scheduler_nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats-init:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/nats-init
+    container_name: scheduler-nats-init
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build:
@@ -32,13 +49,12 @@ services:
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/api
-        CONFIG_NAME: api.yml
     container_name: scheduler-api
     depends_on:
       postgres:
         condition: service_healthy
-      nats:
-        condition: service_started
+      nats-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     volumes:
@@ -56,7 +72,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      nats:
+      nats-init:
+        condition: service_completed_successfully
+      api:
         condition: service_started
     volumes:
       - ./configs/scheduler.yml:/app/config/core.yml:ro
@@ -71,9 +89,9 @@ services:
         CMD_PATH: ./cmd/fetcher-worker
     container_name: scheduler-fetcher
     depends_on:
+      nats-init:
+        condition: service_completed_successfully
       scheduler:
-        condition: service_started
-      nats:
         condition: service_started
     volumes:
       - ./configs/fetcher.yml:/app/config/core.yml:ro
@@ -88,9 +106,9 @@ services:
         CMD_PATH: ./cmd/delivery-worker
     container_name: scheduler-delivery
     depends_on:
+      nats-init:
+        condition: service_completed_successfully
       scheduler:
-        condition: service_started
-      nats:
         condition: service_started
     volumes:
       - ./configs/delivery.yml:/app/config/core.yml:ro

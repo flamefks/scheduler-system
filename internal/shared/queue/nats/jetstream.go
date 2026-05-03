@@ -10,7 +10,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-func NewJetStream(backgrCtx context.Context, nc *nats.Conn) jetstream.JetStream {
+func ConnectJetStream(backgrCtx context.Context, nc *nats.Conn) jetstream.JetStream {
 	ctx, cancel := context.WithTimeout(backgrCtx, 10*time.Second)
 	defer cancel()
 

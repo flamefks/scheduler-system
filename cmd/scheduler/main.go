@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Logging config successfully parsed: %v", b)
+	log.Printf("Logging config successfully parsed: %v", string(b))
 
 	// logger
 	logger, err := logging.NewLogger(logCfg)
@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", b)
+	log.Printf("Core config successfully parsed: %v", string(b))
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -72,7 +72,7 @@ func main() {
 	}
 	defer nc.Drain()
 
-	js := qnats.NewJetStream(appCtx, nc)
+	js := qnats.ConnectJetStream(appCtx, nc)
 
 	//logic
 	publisher := qnats.NewPublisher(js)
