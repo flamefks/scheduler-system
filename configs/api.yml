@@ -7,9 +7,9 @@ http:
   shutdown_timeout: 5s
 
 database:
-  dsn: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
-  max_conns: 10
-  min_conns: 2
-  max_conn_lifetime: 1h
-  max_conn_idle_time: 15m
-  health_check_period: 1m
+  url: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+  max_connections: 10
+  min_connections: 2
+  max_connection_lifetime: 1h
+  min_connection_lifetime: 15m
+  healthcheck_period: 1m

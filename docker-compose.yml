@@ -52,7 +52,6 @@ services:
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/scheduler
-        CONFIG_NAME: scheduler.yml
     container_name: scheduler-scheduler
     depends_on:
       postgres:
@@ -70,7 +69,6 @@ services:
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/fetcher-worker
-        CONFIG_NAME: fetcher.yml
     container_name: scheduler-fetcher
     depends_on:
       scheduler:
@@ -88,7 +86,6 @@ services:
       dockerfile: ./Dockerfile
       args:
         CMD_PATH: ./cmd/delivery-worker
-        CONFIG_NAME: deliver.yml
     container_name: scheduler-delivery
     depends_on:
       scheduler:

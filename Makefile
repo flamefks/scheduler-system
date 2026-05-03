@@ -6,3 +6,7 @@ test-integration:
 
 bench:
 	go test ./internal/... -tags=integration -bench=. -benchmem -run=^$
+
+sqlc:
+	sqlc generate
+	
