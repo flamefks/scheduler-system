@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/golang-migrate/migrate/v4"
-	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -67,7 +67,7 @@ func setupTestRepo(t *testing.T) *testDB {
 		t.Fatalf("failed to ping db: %v", err)
 	}
 
-	if err := runMigrations(pool); err != nil {
+	if err := runMigrations(connStr); err != nil {
 		pool.Close()
 		_ = pgContainer.Terminate(ctx)
 		t.Fatalf("failed to run migrations: %v", err)
@@ -89,24 +89,18 @@ func setupTestRepo(t *testing.T) *testDB {
 	}
 }
 
-func runMigrations(pool *pgxpool.Pool) error {
+func runMigrations(connStr string) error {
 	wd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getwd: %w", err)
 	}
 
 	projectRoot := filepath.Clean(filepath.Join(wd, "../../.."))
-	migrationsPath := filepath.Join(projectRoot, "migrations")
+	migrationsPath := filepath.Join(projectRoot, "sql", "migrations")
 
-	driver, err := migratepgx.WithInstance(pool, &migratepgx.Config{})
-	if err != nil {
-		return fmt.Errorf("migrate driver: %w", err)
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
+	m, err := migrate.New(
 		"file://"+migrationsPath,
-		"postgres",
-		driver,
+		connStr,
 	)
 	if err != nil {
 		return fmt.Errorf("new migrate: %w", err)
