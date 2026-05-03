@@ -37,16 +37,6 @@ func main() {
 	}
 	log.Printf("Logging config successfully parsed: %v", string(b))
 
-	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	b, err = yaml.Marshal(logCfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Core config successfully parsed: %v", string(b))
-
 	logger, err := logging.NewLogger(logCfg)
 	if err != nil {
 		log.Fatal(err)
@@ -55,6 +45,16 @@ func main() {
 		"logger_init",
 		slog.String("status", "success"),
 	)
+
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger.Info("Core config successfully parsed: %v", string(b))
 
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
 	if err != nil {

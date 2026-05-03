@@ -56,7 +56,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", string(b))
+	logger.Info("Core config successfully parsed: %v", string(b))
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)

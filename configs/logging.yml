@@ -3,7 +3,7 @@ format: "json"
 output: "file"
 
 logger:
-  path: "./logs/core.log"
+  path: "/app/logs/core.log"
   max_size_mb: 1024
   max_backups: 4
   max_age_days: 30
