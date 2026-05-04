@@ -32,16 +32,20 @@ func (s *SchedulerService) ClaimNextJob(pctx context.Context) uuid.UUID {
 
 	id, err := s.repo.ClaimNextJob(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil
+		if !errors.Is(err, sql.ErrNoRows) {
+			s.logger.Error(
+				"failed_claim_job",
+				slog.Any("error", err),
+			)
 		}
 
-		s.logger.Error(
-			"failed_claim_job",
-			slog.Any("error", err),
-		)
 		return uuid.Nil
 	}
+
+	s.logger.Info(
+		"success_claim_job",
+		slog.Any("job_id", id),
+	)
 	return id
 }
 
