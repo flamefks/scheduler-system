@@ -55,7 +55,7 @@ func TestNewApiService(t *testing.T) {
 	if svc.repo == nil {
 		t.Fatal("expected repo to be set")
 	}
-	if svc.logger == nil {
+	if svc.Logger == nil {
 		t.Fatal("expected logger to be set")
 	}
 }

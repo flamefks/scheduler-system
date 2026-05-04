@@ -12,6 +12,7 @@ import (
 	"github.com/flamefks/scheduler-system/internal/fetcher/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
 	natsqueue "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/flamefks/scheduler-system/internal/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -90,7 +91,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		return err, 0
 	}
 
-	err = f.publisher.Publish(ctx, "jobs.fetch", bytesMsg, map[string]string{
+	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, bytesMsg, map[string]string{
 		"job-id": strJobId,
 	})
 	if err != nil {

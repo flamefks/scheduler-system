@@ -8,6 +8,7 @@ import (
 	"time"
 
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
 	qpublsher "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 )
@@ -57,7 +58,7 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 		"job-id": dataId.String(),
 	}
 
-	err := s.publisher.Publish(ctx, "jobs.fetch", nil, natsHeaders)
+	err := s.publisher.Publish(ctx, sharedData.JobsSubjectFetcher, nil, natsHeaders)
 	if err != nil {
 		s.logger.Error(
 			"failed_publish_uuid",

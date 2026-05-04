@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
@@ -25,6 +26,11 @@ func NewApiHandler(service *service.ApiService) *ApiHandler {
 func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 	var req CreateJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.apiService.Logger.Warn(
+			"error_create_job",
+			slog.Any("state", "decode_request"),
+			slog.Any("error", err),
+		)
 		httputils.WriteJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "error decoding request body",
