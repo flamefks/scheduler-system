@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -52,7 +53,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	logger.Info("Core config successfully parsed: %v", string(b))
+	logger.Info(
+		"core_config_successfully_parsed",
+		slog.String("config", string(b)),
+	)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
