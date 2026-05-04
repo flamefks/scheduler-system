@@ -58,6 +58,11 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return err, 0
 	}
+	f.logger.Info(
+		"success_get_config",
+		slog.String("job_id", strJobId),
+		slog.Any("config", &reqConfig),
+	)
 
 	var headerMap map[string]string
 	if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
@@ -85,9 +90,19 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return err, response.StatusCode
 	}
+	f.logger.Info(
+		"success_sent_reponse",
+		slog.String("job_id", strJobId),
+		slog.Any("data", &response),
+	)
 
 	bytesMsg, err := json.Marshal(response)
 	if err != nil {
+		f.logger.Error(
+			"failed_marshal_http_response",
+			slog.Any("job_id", jobId),
+			slog.Any("err", err),
+		)
 		return err, 0
 	}
 
@@ -117,7 +132,20 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 		return err
 	}
 
-	return f.repo.SetJobStatus(ctx, "error", jobId)
+	err = f.repo.SetJobStatus(ctx, "error", jobId)
+
+	if err != nil {
+		f.logger.Error(
+			"failed_set_job_error",
+			slog.Any("err", err),
+		)
+		return err
+	}
+	f.logger.Info(
+		"success_handle_error",
+		slog.String("job_id", strJobId),
+	)
+	return nil
 }
 
 func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header) error {

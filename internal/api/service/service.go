@@ -36,8 +36,8 @@ func (service *ApiService) CreateJob(ctx context.Context, job *data.Job) (uuid.U
 	}
 	service.Logger.Info(
 		"success_create_job",
-		slog.Any("job_id", job.ID),
 		slog.Any("job_name", job.Name),
+		slog.Any("job", &job),
 	)
 	return jobId, nil
 }
@@ -72,6 +72,7 @@ func (service *ApiService) GetJobByID(ctx context.Context, jobId uuid.UUID) (*da
 	service.Logger.Info(
 		"success_get_job",
 		slog.Any("job_id", jobId),
+		slog.Any("job", &j),
 	)
 	return j, nil
 }

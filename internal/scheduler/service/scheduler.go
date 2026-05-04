@@ -65,6 +65,10 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 			slog.Any("error", err),
 		)
 	}
+	s.logger.Info(
+		"success_publish_job_id",
+		slog.String("job_id", dataId.String()),
+	)
 }
 
 func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
@@ -85,7 +89,7 @@ func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
 			stop()
 			if err != nil {
 				s.logger.Error(
-					"reset_hung_message",
+					"error_reset_hung_message",
 					slog.String("status", "error"),
 					slog.Any("msg", err),
 				)
@@ -109,7 +113,7 @@ func (s *SchedulerService) MonitorDisabledTasks(parentCtx context.Context, pollI
 			stop()
 			if err != nil {
 				s.logger.Error(
-					"reset_hung_message",
+					"error_disable_task",
 					slog.String("status", "error"),
 					slog.Any("msg", err),
 				)

@@ -55,6 +55,11 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 		)
 		return err, 0
 	}
+	ds.logger.Info(
+		"success_get_config",
+		slog.String("job_id", strJobId),
+		slog.Any("config", &reqConfig),
+	)
 
 	var headerMap map[string]string
 	if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
@@ -82,6 +87,11 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 		)
 		return err, 0
 	}
+	ds.logger.Info(
+		"success_sent_reponse",
+		slog.String("job_id", strJobId),
+		slog.Any("data", &response),
+	)
 
 	err = ds.repo.SetJobStatus(ctx, "idle", jobId)
 	if err != nil {
@@ -90,11 +100,11 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	return nil, response.StatusCode
 }
 
-func (f *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
+func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := utils.GetJobIDFromHeader(strJobId)
 	if err != nil {
-		f.logger.Error(
+		ds.logger.Error(
 			"invalid_job_id_header",
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
@@ -102,7 +112,19 @@ func (f *DeliverService) HandleError(ctx context.Context, binData []byte, natsHe
 		return err
 	}
 
-	return f.repo.SetJobStatus(ctx, "error", jobId)
+	err = ds.repo.SetJobStatus(ctx, "error", jobId)
+	if err != nil {
+		ds.logger.Error(
+			"failed_set_job_error",
+			slog.Any("err", err),
+		)
+		return err
+	}
+	ds.logger.Info(
+		"success_handle_error",
+		slog.String("job_id", strJobId),
+	)
+	return nil
 }
 
 func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) error {

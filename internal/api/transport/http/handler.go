@@ -48,12 +48,16 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 			LastRunAt:         nil,
 		},
 		FetcherConfig: data.IOConfig{
-			Payload: req.FetcherConfig.Payload,
-			Headers: req.FetcherConfig.Headers,
+			TargetUrl: req.FetcherConfig.TargetURL,
+			Method:    req.FetcherConfig.Method,
+			Payload:   req.FetcherConfig.Payload,
+			Headers:   req.FetcherConfig.Headers,
 		},
 		DeliverConfig: data.IOConfig{
-			Payload: req.DeliverConfig.Payload,
-			Headers: req.DeliverConfig.Headers,
+			TargetUrl: req.DeliverConfig.TargetURL,
+			Method:    req.DeliverConfig.Method,
+			Payload:   req.DeliverConfig.Payload,
+			Headers:   req.DeliverConfig.Headers,
 		},
 	}
 

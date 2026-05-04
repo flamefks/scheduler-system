@@ -17,8 +17,10 @@ type ScheduleBlockCreateJobRequest struct {
 }
 
 type IOBlockCreateJobRequest struct {
-	Payload []byte `json:"payload"`
-	Headers []byte `json:"headers"`
+	TargetURL string `json:"target_url"`
+	Method    string `json:"method"`
+	Payload   []byte `json:"payload"`
+	Headers   []byte `json:"headers"`
 }
 
 type CreateJobRequest struct {
