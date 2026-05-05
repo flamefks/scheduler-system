@@ -80,12 +80,17 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 
 	response, err := ds.httpClient.Do(ctx, request)
 	if err != nil {
+		statusCode := 0
+		if response != nil {
+			statusCode = response.StatusCode
+		}
+
 		ds.logger.Error(
 			"failed_http_request",
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, 0
+		return err, statusCode
 	}
 	ds.logger.Info(
 		"success_sent_reponse",

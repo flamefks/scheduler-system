@@ -83,12 +83,17 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 
 	response, err := f.httpClient.Do(ctx, request)
 	if err != nil {
+		statusCode := 0
+		if response != nil {
+			statusCode = response.StatusCode
+		}
+
 		f.logger.Error(
 			"failed_http_request",
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, response.StatusCode
+		return err, statusCode
 	}
 	f.logger.Info(
 		"success_sent_reponse",
