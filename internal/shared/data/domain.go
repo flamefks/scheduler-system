@@ -1,14 +1,15 @@
 package data
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type IOConfig struct {
-	Payload   []byte
-	Headers   []byte
+	Payload   json.RawMessage
+	Headers   json.RawMessage
 	TargetUrl string
 	Method    string
 }

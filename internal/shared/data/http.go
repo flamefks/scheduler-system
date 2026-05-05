@@ -1,18 +1,21 @@
 package data
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 type Request struct {
 	Method  string
 	URL     string
 	Headers map[string]string
-	Body    []byte
+	Body    json.RawMessage
 }
 
 type ExternalResponse struct {
 	StatusCode int
 	Headers    http.Header
-	Body       []byte
+	Body       json.RawMessage
 }
 
 type BasicResonse struct {

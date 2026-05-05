@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -17,10 +18,10 @@ type ScheduleBlockCreateJobRequest struct {
 }
 
 type IOBlockCreateJobRequest struct {
-	TargetURL string `json:"target_url"`
-	Method    string `json:"method"`
-	Payload   []byte `json:"payload"`
-	Headers   []byte `json:"headers"`
+	TargetURL string          `json:"target_url"`
+	Method    string          `json:"method"`
+	Payload   json.RawMessage `json:"payload"`
+	Headers   json.RawMessage `json:"headers"`
 }
 
 type CreateJobRequest struct {
@@ -43,8 +44,8 @@ type ScheduleBlockPatchJobRequest struct {
 }
 
 type IOBlockPatchJobRequest struct {
-	Payload *[]byte `json:"payload"`
-	Headers *[]byte `json:"headers"`
+	Payload *json.RawMessage `json:"payload"`
+	Headers *json.RawMessage `json:"headers"`
 }
 
 type PatchJobRequest struct {
