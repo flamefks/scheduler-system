@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -16,10 +17,10 @@ type PatchScheduleModel struct {
 }
 
 type PatchIOConfig struct {
-	Payload    *[]byte
-	HeaderAuth *[]byte
-	TargetUrl  *string
-	Method     *string
+	Payload   *json.RawMessage
+	Headers   *json.RawMessage
+	TargetUrl *string
+	Method    *string
 }
 
 type PatchJobModel struct {

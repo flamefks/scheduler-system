@@ -1,0 +1,18 @@
+nats:
+  url: "nats://nats:4222"
+
+database:
+  url: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+  max_connections: 10
+  min_connections: 2
+  max_connection_lifetime: 1h
+  min_connection_lifetime: 15m
+  healthcheck_period: 1m
+
+http_retry:
+  max_attempts: 5
+  base_delay: 5s 
+  max_delay: 2m 
+  back_off: exponential
+  retry_on_status: [408, 429, 500, 502, 503, 504]
+  retry_on_error: true 

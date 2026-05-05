@@ -7,7 +7,7 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,7 +29,7 @@ func NewRepository(pool *pgxpool.Pool, q *db.Queries) *Repository {
 // CREATE
 // =========================
 
-func (repo *Repository) CreateJob(ctx context.Context, job *shared.Job) (uuid.UUID, error) {
+func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
 	tx, err := repo.pool.Begin(ctx)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("begin tx: %w", err)
@@ -60,24 +60,24 @@ func (repo *Repository) CreateJob(ctx context.Context, job *shared.Job) (uuid.UU
 
 	// fetcher config
 	if err := qtx.CreateJobIOConfig(ctx, db.CreateJobIOConfigParams{
-		JobID:      jobID,
-		Kind:       db.JobIoKindFetcher,
-		Payload:    job.FetcherConfig.Payload,
-		HeaderAuth: job.FetcherConfig.HeaderAuth,
-		TargetUrl:  job.FetcherConfig.TargetUrl,
-		Method:     job.FetcherConfig.Method,
+		JobID:     jobID,
+		Kind:      db.JobIoKindFetcher,
+		Payload:   job.FetcherConfig.Payload,
+		Headers:   job.FetcherConfig.Headers,
+		TargetUrl: job.FetcherConfig.TargetUrl,
+		Method:    job.FetcherConfig.Method,
 	}); err != nil {
 		return uuid.Nil, fmt.Errorf("create fetcher config: %w", err)
 	}
 
 	// deliver config
 	if err := qtx.CreateJobIOConfig(ctx, db.CreateJobIOConfigParams{
-		JobID:      jobID,
-		Kind:       db.JobIoKindDeliver,
-		Payload:    job.DeliverConfig.Payload,
-		HeaderAuth: job.DeliverConfig.HeaderAuth,
-		TargetUrl:  job.DeliverConfig.TargetUrl,
-		Method:     job.DeliverConfig.Method,
+		JobID:     jobID,
+		Kind:      db.JobIoKindDeliver,
+		Payload:   job.DeliverConfig.Payload,
+		Headers:   job.DeliverConfig.Headers,
+		TargetUrl: job.DeliverConfig.TargetUrl,
+		Method:    job.DeliverConfig.Method,
 	}); err != nil {
 		return uuid.Nil, fmt.Errorf("create deliver config: %w", err)
 	}
@@ -93,7 +93,7 @@ func (repo *Repository) CreateJob(ctx context.Context, job *shared.Job) (uuid.UU
 // GET
 // =========================
 
-func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*shared.Job, error) {
+func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job, error) {
 	jobDb, err := repo.q.GetJob(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get job: %w", err)
@@ -109,36 +109,36 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*shared.J
 		return nil, fmt.Errorf("get configs: %w", err)
 	}
 
-	var fetcher, deliver shared.IOConfig
+	var fetcher, deliver data.IOConfig
 
 	for _, c := range configs {
 		switch c.Kind {
 		case db.JobIoKindFetcher:
-			fetcher = shared.IOConfig{
-				Payload:    c.Payload,
-				HeaderAuth: c.HeaderAuth,
-				TargetUrl:  c.TargetUrl,
-				Method:     c.Method,
+			fetcher = data.IOConfig{
+				Payload:   c.Payload,
+				Headers:   c.Headers,
+				TargetUrl: c.TargetUrl,
+				Method:    c.Method,
 			}
 		case db.JobIoKindDeliver:
-			deliver = shared.IOConfig{
-				Payload:    c.Payload,
-				HeaderAuth: c.HeaderAuth,
-				TargetUrl:  c.TargetUrl,
-				Method:     c.Method,
+			deliver = data.IOConfig{
+				Payload:   c.Payload,
+				Headers:   c.Headers,
+				TargetUrl: c.TargetUrl,
+				Method:    c.Method,
 			}
 		}
 	}
 
-	return &shared.Job{
+	return &data.Job{
 		ID:   jobDb.ID,
 		Name: jobDb.Name,
 
-		Schedule: shared.Schedule{
+		Schedule: data.Schedule{
 			Status:            string(schedule.Status),
 			RepeatIntervalSec: schedule.RepeatIntervalSec,
 			TargetRuns:        schedule.TargetRuns,
-			DoneRuns:          schedule.DoneRuns,
+			ScheduledRuns:     schedule.ScheduledRuns,
 			NextRunAt:         schedule.NextRunAt,
 			LastRunAt:         schedule.LastRunAt,
 		},
@@ -213,14 +213,14 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 	if patch.FetcherConfig != nil {
 
 		var SetPayload bool = false
-		var SetHeaderAuth bool = false
+		var SetHeaders bool = false
 
 		var payload []byte
-		var headerAuth []byte
+		var Headers []byte
 
-		if patch.FetcherConfig.HeaderAuth != nil {
-			SetHeaderAuth = true
-			headerAuth = *patch.FetcherConfig.HeaderAuth
+		if patch.FetcherConfig.Headers != nil {
+			SetHeaders = true
+			Headers = *patch.FetcherConfig.Headers
 		}
 		if patch.FetcherConfig.Payload != nil {
 			SetPayload = true
@@ -228,14 +228,14 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 		}
 
 		if _, err := qtx.PatchJobIOConfig(ctx, db.PatchJobIOConfigParams{
-			JobID:         id,
-			Kind:          db.JobIoKindFetcher,
-			SetPayload:    SetPayload,
-			Payload:       payload,
-			SetHeaderAuth: SetHeaderAuth,
-			HeaderAuth:    headerAuth,
-			TargetUrl:     patch.FetcherConfig.TargetUrl,
-			Method:        patch.FetcherConfig.Method,
+			JobID:      id,
+			Kind:       db.JobIoKindFetcher,
+			SetPayload: SetPayload,
+			Payload:    payload,
+			SetHeaders: SetHeaders,
+			Headers:    Headers,
+			TargetUrl:  patch.FetcherConfig.TargetUrl,
+			Method:     patch.FetcherConfig.Method,
 		}); err != nil {
 			return fmt.Errorf("patch fetcher config: %w", err)
 		}
@@ -245,28 +245,28 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 	if patch.DeliverConfig != nil {
 
 		var SetPayload bool = false
-		var SetHeaderAuth bool = false
+		var SetHeaders bool = false
 
 		var payload []byte
-		var headerAuth []byte
+		var Headers []byte
 
-		if patch.FetcherConfig.HeaderAuth != nil {
-			SetHeaderAuth = true
-			headerAuth = *patch.FetcherConfig.HeaderAuth
+		if patch.DeliverConfig.Headers != nil {
+			SetHeaders = true
+			Headers = *patch.DeliverConfig.Headers
 		}
-		if patch.FetcherConfig.Payload != nil {
+		if patch.DeliverConfig.Payload != nil {
 			SetPayload = true
-			payload = *patch.FetcherConfig.Payload
+			payload = *patch.DeliverConfig.Payload
 		}
 		if _, err := qtx.PatchJobIOConfig(ctx, db.PatchJobIOConfigParams{
-			JobID:         id,
-			Kind:          db.JobIoKindFetcher,
-			SetPayload:    SetPayload,
-			Payload:       payload,
-			SetHeaderAuth: SetHeaderAuth,
-			HeaderAuth:    headerAuth,
-			TargetUrl:     patch.DeliverConfig.TargetUrl,
-			Method:        patch.DeliverConfig.Method,
+			JobID:      id,
+			Kind:       db.JobIoKindFetcher,
+			SetPayload: SetPayload,
+			Payload:    payload,
+			SetHeaders: SetHeaders,
+			Headers:    Headers,
+			TargetUrl:  patch.DeliverConfig.TargetUrl,
+			Method:     patch.DeliverConfig.Method,
 		}); err != nil {
 			return fmt.Errorf("patch deliver config: %w", err)
 		}

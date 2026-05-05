@@ -14,9 +14,11 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	qnats "github.com/flamefks/scheduler-system/internal/queue/nats"
-	"github.com/flamefks/scheduler-system/internal/shared"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
+	sharedRepo "github.com/flamefks/scheduler-system/internal/shared/repository"
 	"github.com/nats-io/nats.go"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -28,7 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Logging config successfully parsed: %v", logCfg)
+	b, err := yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Logging config successfully parsed: %v", string(b))
 
 	// logger
 	logger, err := logging.NewLogger(logCfg)
@@ -38,7 +44,7 @@ func main() {
 	logger.Info("logger_init", "status", "success")
 
 	// core config
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
 	if err != nil {
 		logger.Error("core_config_initialization",
 			slog.String("status", "error"),
@@ -46,7 +52,14 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger.Info(
+		"core_config_successfully_parsed",
+		slog.String("config", string(b)),
+	)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -75,7 +88,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Drain()
-	js := qnats.NewJetStream(appCtx, nc)
+	js, err := qnats.ConnectJetStream(nc)
+	if err != nil {
+		log.Fatalf("Error connecting stream: %v", err)
+	}
 
 	logger.Info("nats_connection",
 		slog.String("status", "success"),
@@ -84,7 +100,7 @@ func main() {
 
 	// service initialization
 	publisher := qnats.NewPublisher(js)
-	repository := shared.NewWorkerRepository(queries)
+	repository := sharedRepo.NewWorkerRepository(queries)
 	fetcherService := service.NewFetcherService(
 		logger,
 		publisher,
@@ -92,12 +108,12 @@ func main() {
 	)
 
 	// consumer
-	consumer := qnats.NewConsumer(js, shared.JobsSubjectFetcher)
+	consumer := qnats.NewConsumer(js, sharedData.JobsSubjectFetcher)
 
 	logger.Info("service_started")
 
 	if err := consumer.Consume(appCtx, fetcherService.PipelineHandler, fetcherService.ErrorHandler,
-		shared.FetcherGroup); err != nil {
+		sharedData.FetcherGroup); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)
 	}

@@ -1,0 +1,15 @@
+http:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 5s
+  write_timeout: 10s
+  idle_timeout: 60s
+  shutdown_timeout: 5s
+
+database:
+  url: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+  max_connections: 10
+  min_connections: 2
+  max_connection_lifetime: 1h
+  min_connection_lifetime: 15m
+  healthcheck_period: 1m

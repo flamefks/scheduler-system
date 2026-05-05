@@ -3,35 +3,12 @@ package shared
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 )
-
-type Request struct {
-	Method  string
-	URL     string
-	Headers map[string]string
-	Body    []byte
-}
-
-type Response struct {
-	StatusCode int
-	Headers    http.Header
-	Body       []byte
-}
-
-func WriteJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-type BasicResonse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
 
 type HTTPClient struct {
 	client *http.Client
@@ -43,7 +20,7 @@ func NewHTTPClient() *HTTPClient {
 	}
 }
 
-func (c *HTTPClient) Do(ctx context.Context, req *Request) (*Response, error) {
+func (c *HTTPClient) Do(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 	parsedURL, err := url.Parse(req.URL)
 	if err != nil {
 		return nil, err
@@ -74,7 +51,7 @@ func (c *HTTPClient) Do(ctx context.Context, req *Request) (*Response, error) {
 		return nil, err
 	}
 
-	return &Response{
+	return &data.ExternalResponse{
 		StatusCode: resp.StatusCode,
 		Headers:    resp.Header.Clone(),
 		Body:       body,

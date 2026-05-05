@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,12 +13,13 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
-	qnats "github.com/flamefks/scheduler-system/internal/queue/nats"
 	coreConf "github.com/flamefks/scheduler-system/internal/scheduler/config"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
+	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -29,7 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Logging config successfully parsed: %v", logCfg)
+	b, err := yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Logging config successfully parsed: %v", string(b))
 
 	// logger
 	logger, err := logging.NewLogger(logCfg)
@@ -43,7 +49,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger.Info(
+		"core_config_successfully_parsed",
+		slog.String("config", string(b)),
+	)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -63,7 +76,10 @@ func main() {
 	}
 	defer nc.Drain()
 
-	js := qnats.NewJetStream(appCtx, nc)
+	js, err := qnats.ConnectJetStream(nc)
+	if err != nil {
+		log.Fatalf("Error connecting stream: %v", err)
+	}
 
 	//logic
 	publisher := qnats.NewPublisher(js)
@@ -73,8 +89,14 @@ func main() {
 	// semaphore
 	sem := make(chan struct{}, 256)
 
+	// Bacground checkers
+	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout,
+		coreCfg.BackgroundTasks.HungJobsMonitor.PollInterval)
+
+	go schedulerService.MonitorDisabledTasks(appCtx, coreCfg.BackgroundTasks.DisableJobsMonitor.PollInterval)
+
 	// Loop
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(coreCfg.GetJobPollInterval)
 	defer ticker.Stop()
 
 	for {

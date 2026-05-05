@@ -106,23 +106,23 @@ type Job struct {
 }
 
 type JobIoConfig struct {
-	JobID      uuid.UUID
-	Kind       JobIoKind
-	Payload    []byte
-	HeaderAuth []byte
-	TargetUrl  string
-	Method     string
-	CreatedAt  time.Time
+	JobID     uuid.UUID
+	Kind      JobIoKind
+	Payload   []byte
+	Headers   []byte
+	TargetUrl string
+	Method    string
+	CreatedAt time.Time
 }
 
 type JobSchedule struct {
 	JobID             uuid.UUID
 	Status            ScheduleStatus
 	RepeatIntervalSec int32
-	DoneRuns          int32
 	TargetRuns        int32
 	LastRunAt         *time.Time
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	ScheduledRuns     int32
 }

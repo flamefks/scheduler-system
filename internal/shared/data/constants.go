@@ -1,4 +1,4 @@
-package shared
+package data
 
 const (
 	NatsStreamName     = "JOBS"

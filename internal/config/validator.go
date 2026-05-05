@@ -58,3 +58,24 @@ func ValidateDbSection(cfg *PostgresSection) (*PostgresSection, error) {
 	}
 	return cfg, nil
 }
+
+func ValidateHttpRetrySection(cfg *HttpRetryPolicySection) (*HttpRetryPolicySection, error) {
+	if cfg.MaxAttempts == 0 {
+		cfg.MaxAttempts = 3
+	}
+
+	if cfg.BaseDelay == 0 {
+		cfg.BaseDelay = time.Second * 5
+	}
+
+	if cfg.MaxDelay == 0 || cfg.MaxDelay < cfg.BaseDelay {
+		cfg.MaxDelay = cfg.BaseDelay + 1
+	}
+
+	if cfg.Backoff != "fixed" && cfg.Backoff == "exponential" {
+		cfg.Backoff = "fixed"
+	}
+
+	return cfg, nil
+
+}

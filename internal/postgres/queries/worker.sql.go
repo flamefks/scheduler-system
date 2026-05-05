@@ -14,7 +14,7 @@ import (
 const getConfig = `-- name: GetConfig :one
 SELECT 
     payload, 
-    header_auth,
+    headers,
     target_url,
     method
 FROM job_io_configs  
@@ -27,10 +27,10 @@ type GetConfigParams struct {
 }
 
 type GetConfigRow struct {
-	Payload    []byte
-	HeaderAuth []byte
-	TargetUrl  string
-	Method     string
+	Payload   []byte
+	Headers   []byte
+	TargetUrl string
+	Method    string
 }
 
 func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfigRow, error) {
@@ -38,7 +38,7 @@ func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfig
 	var i GetConfigRow
 	err := row.Scan(
 		&i.Payload,
-		&i.HeaderAuth,
+		&i.Headers,
 		&i.TargetUrl,
 		&i.Method,
 	)

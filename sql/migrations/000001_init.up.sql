@@ -48,7 +48,7 @@ CREATE TABLE job_io_configs (
     kind job_io_kind NOT NULL,
 
     payload JSONB NOT NULL,
-    header_auth JSONB NULL,
+    headers JSONB NULL,
     target_url TEXT NOT NULL,
     method TEXT NOT NULL,
 
@@ -81,9 +81,6 @@ CREATE TABLE job_io_configs (
 
 CREATE INDEX idx_job_schedules_status_next_run
     ON job_schedules (status, next_run_at);
-
-CREATE INDEX idx_job_schedules_start_at
-    ON job_schedules (start_at);
 
 CREATE INDEX idx_job_schedules_status
     ON job_schedules (status);

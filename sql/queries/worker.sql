@@ -1,7 +1,7 @@
 -- name: GetConfig :one
 SELECT 
     payload, 
-    header_auth,
+    headers,
     target_url,
     method
 FROM job_io_configs  

@@ -1,9 +1,10 @@
 package http
 
 import (
+	"encoding/json"
 	"time"
 
-	"github.com/flamefks/scheduler-system/internal/shared"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 )
 
 // =========================
@@ -17,8 +18,10 @@ type ScheduleBlockCreateJobRequest struct {
 }
 
 type IOBlockCreateJobRequest struct {
-	Payload    []byte `json:"payload"`
-	HeaderAuth []byte `json:"header_auth"`
+	TargetURL string          `json:"target_url"`
+	Method    string          `json:"method"`
+	Payload   json.RawMessage `json:"payload"`
+	Headers   json.RawMessage `json:"headers"`
 }
 
 type CreateJobRequest struct {
@@ -41,8 +44,8 @@ type ScheduleBlockPatchJobRequest struct {
 }
 
 type IOBlockPatchJobRequest struct {
-	Payload    *[]byte `json:"payload"`
-	HeaderAuth *[]byte `json:"header_auth"`
+	Payload *json.RawMessage `json:"payload"`
+	Headers *json.RawMessage `json:"headers"`
 }
 
 type PatchJobRequest struct {
@@ -53,12 +56,17 @@ type PatchJobRequest struct {
 	DeliverConfig *IOBlockPatchJobRequest `json:"deliver_config"`
 }
 
+// UpdateStatusJob
+type UpdateStatusRequest struct {
+	Status string `json:"status"`
+}
+
 // =========================
 // Responses
 // =========================
 type GetJobResponse struct {
-	Status string      `json:"status"`
-	Data   *shared.Job `json:"data"`
+	Status string    `json:"status"`
+	Data   *data.Job `json:"data"`
 }
 
 type ResponseWithUUID struct {

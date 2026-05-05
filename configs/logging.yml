@@ -1,0 +1,11 @@
+level: "debug"
+format: "json" 
+output: "file"
+
+logger:
+  path: "/app/logs/core.log"
+  max_size_mb: 1024
+  max_backups: 4
+  max_age_days: 30
+  compress: false 
+  

@@ -1,0 +1,142 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scheduler-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: scheduler
+      POSTGRES_PASSWORD: scheduler
+      POSTGRES_DB: scheduler_db
+    volumes:
+      - scheduler_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduler -d scheduler_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-migrate:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/postgres-migrate
+    container_name: scheduler-postgres-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable
+    volumes:
+      - ./sql/migrations:/app/sql/migrations:ro
+    restart: "no"
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: scheduler-nats
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - scheduler_nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats-init:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/nats-init
+    container_name: scheduler-nats-init
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      NATS_URL: nats://nats:4222
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/api
+    container_name: scheduler-api
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      nats-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs/api.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/api:/app/logs
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/scheduler
+    container_name: scheduler-scheduler
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      nats-init:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    volumes:
+      - ./configs/scheduler.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/scheduler:/app/logs
+
+  fetcher-worker:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/fetcher-worker
+    container_name: scheduler-fetcher
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      nats-init:
+        condition: service_completed_successfully
+      scheduler:
+        condition: service_started
+    volumes:
+      - ./configs/fetcher.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/fetcher:/app/logs
+
+  delivery-worker:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CMD_PATH: ./cmd/delivery-worker
+    container_name: scheduler-delivery
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      nats-init:
+        condition: service_completed_successfully
+      scheduler:
+        condition: service_started
+    volumes:
+      - ./configs/deliver.yml:/app/config/core.yml:ro
+      - ./configs/logging.yml:/app/config/logging.yml:ro
+      - ./logs/delivery:/app/logs
+
+volumes:
+  scheduler_pg_data:
+  scheduler_nats_data:

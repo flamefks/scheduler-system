@@ -6,11 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	coreConf "github.com/flamefks/scheduler-system/internal/api/config"
 	service "github.com/flamefks/scheduler-system/internal/api/service"
 	apiHttp "github.com/flamefks/scheduler-system/internal/api/transport/http"
+	"gopkg.in/yaml.v3"
 
 	dbRepo "github.com/flamefks/scheduler-system/internal/api/repository"
 	generalConf "github.com/flamefks/scheduler-system/internal/config"
@@ -20,19 +24,18 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	logCfg, err := generalConf.LoadLogging("config/logging.yml")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Logging config successfully parsed: %v", logCfg)
-
-	coreCfg, err := coreConf.LoadCoreConfig("config/core.yml")
+	b, err := yaml.Marshal(logCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Core config successfully parsed: %v", coreCfg)
+	log.Printf("Logging config successfully parsed: %v", string(b))
 
 	logger, err := logging.NewLogger(logCfg)
 	if err != nil {
@@ -43,7 +46,20 @@ func main() {
 		slog.String("status", "success"),
 	)
 
-	pool, err := postgres.NewPool(ctx, coreCfg.Postgres)
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	b, err = yaml.Marshal(logCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger.Info(
+		"core_config_successfully_parsed",
+		slog.String("config", string(b)),
+	)
+
+	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
 	if err != nil {
 		logger.Error(
 			"postgres_connection",
@@ -77,6 +93,19 @@ func main() {
 		"http server starting",
 		slog.String("addr", srv.Addr),
 	)
+
+	go func() {
+		<-appCtx.Done()
+
+		logger.Info("shutdown signal received")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("http server shutdown failed", "err", err)
+		}
+	}()
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("http server failed", "err", err)

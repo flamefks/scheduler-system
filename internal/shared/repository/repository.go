@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
+	"github.com/flamefks/scheduler-system/internal/shared/data"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +19,7 @@ func NewWorkerRepository(q *db.Queries) *WorkerRepository {
 	}
 }
 
-func (repo *WorkerRepository) GetConfig(ctx context.Context, kind string, jobId uuid.UUID) (*IOConfig, error) {
+func (repo *WorkerRepository) GetConfig(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error) {
 	jKind, err := getJobKindEnum(kind)
 	if err != nil {
 		return nil, err
@@ -31,9 +32,11 @@ func (repo *WorkerRepository) GetConfig(ctx context.Context, kind string, jobId 
 	if err != nil {
 		return nil, fmt.Errorf("failed get JobIoConfig: %w", err)
 	}
-	return &IOConfig{
-		Payload:    ioConfig.Payload,
-		HeaderAuth: ioConfig.HeaderAuth,
+	return &data.IOConfig{
+		TargetUrl: ioConfig.TargetUrl,
+		Method:    ioConfig.Method,
+		Payload:   ioConfig.Payload,
+		Headers:   ioConfig.Headers,
 	}, nil
 }
 

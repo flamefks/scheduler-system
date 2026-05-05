@@ -2,21 +2,24 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"time"
 
-	qpublsher "github.com/flamefks/scheduler-system/internal/queue/nats"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
+	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	qpublsher "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 )
 
 type SchedulerService struct {
 	logger    *slog.Logger
 	repo      repo.PostgresRepo
-	publisher *qpublsher.Publisher
+	publisher qpublsher.AbstractPublisher
 }
 
-func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p *qpublsher.Publisher) *SchedulerService {
+func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p qpublsher.AbstractPublisher) *SchedulerService {
 	return &SchedulerService{
 		logger:    logger,
 		repo:      r,
@@ -30,37 +33,91 @@ func (s *SchedulerService) ClaimNextJob(pctx context.Context) uuid.UUID {
 
 	id, err := s.repo.ClaimNextJob(ctx)
 	if err != nil {
-		s.logger.Error(
-			"failed_claim_job",
-			slog.Any("error", err),
-		)
+		if !errors.Is(err, sql.ErrNoRows) {
+			s.logger.Error(
+				"failed_claim_job",
+				slog.Any("error", err),
+			)
+		}
+
 		return uuid.Nil
 	}
+
+	s.logger.Info(
+		"success_claim_job",
+		slog.Any("job_id", id),
+	)
 	return id
 }
 
 func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uuid.UUID) {
-	binId, err := dataId.MarshalBinary()
-	if err != nil {
-		s.logger.Error(
-			"failed_marshal_uuid",
-			slog.Any("error", err),
-		)
-	}
-
 	ctx, cancel := context.WithTimeout(pctx, 5*time.Second)
 	defer cancel()
 
-	err = s.publisher.Publish(ctx, "jobs.fetch", binId)
+	natsHeaders := map[string]string{
+		"job-id": dataId.String(),
+	}
+
+	err := s.publisher.Publish(ctx, sharedData.JobsSubjectFetcher, nil, natsHeaders)
 	if err != nil {
 		s.logger.Error(
 			"failed_publish_uuid",
 			slog.Any("error", err),
 		)
 	}
+	s.logger.Info(
+		"success_publish_job_id",
+		slog.String("job_id", dataId.String()),
+	)
 }
 
-// мониторит статусы (служит для зависших active / error задач, для их перевода в idle)
-func (s *SchedulerService) MonitorTasksStatuses(parentCtx context.Context) {
+func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
+	JobDeathTimeout int, pollInterval time.Duration) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
 
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			dbCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			err := s.repo.ResetHungMessage(dbCtx, JobDeathTimeout)
+			stop()
+			if err != nil {
+				s.logger.Error(
+					"error_reset_hung_message",
+					slog.String("status", "error"),
+					slog.Any("msg", err),
+				)
+			}
+		}
+	}
+}
+
+func (s *SchedulerService) MonitorDisabledTasks(parentCtx context.Context, pollInterval time.Duration) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			dbCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			err := s.repo.SwitchToDisabledIfNeed(dbCtx)
+			stop()
+			if err != nil {
+				s.logger.Error(
+					"error_disable_task",
+					slog.String("status", "error"),
+					slog.Any("msg", err),
+				)
+			}
+		}
+	}
 }
