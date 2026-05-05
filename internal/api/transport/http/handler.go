@@ -43,7 +43,7 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		Schedule: data.Schedule{
 			RepeatIntervalSec: req.Schedule.RepeatIntervalSec,
 			TargetRuns:        req.Schedule.TargetRuns,
-			DoneRuns:          0,
+			ScheduledRuns:     0,
 			NextRunAt:         req.Schedule.NextRunAt,
 			LastRunAt:         nil,
 		},

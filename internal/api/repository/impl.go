@@ -138,7 +138,7 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job
 			Status:            string(schedule.Status),
 			RepeatIntervalSec: schedule.RepeatIntervalSec,
 			TargetRuns:        schedule.TargetRuns,
-			DoneRuns:          schedule.DoneRuns,
+			ScheduledRuns:     schedule.ScheduledRuns,
 			NextRunAt:         schedule.NextRunAt,
 			LastRunAt:         schedule.LastRunAt,
 		},
