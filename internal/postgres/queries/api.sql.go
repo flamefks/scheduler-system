@@ -146,7 +146,7 @@ SELECT
     job_id,
     status,
     repeat_interval_sec,
-    done_runs,
+    scheduled_runs,
     target_runs,
     last_run_at,
     next_run_at,
@@ -156,14 +156,26 @@ FROM job_schedules
 WHERE job_id = $1
 `
 
-func (q *Queries) GetJobSchedule(ctx context.Context, jobID uuid.UUID) (JobSchedule, error) {
+type GetJobScheduleRow struct {
+	JobID             uuid.UUID
+	Status            ScheduleStatus
+	RepeatIntervalSec int32
+	ScheduledRuns     int32
+	TargetRuns        int32
+	LastRunAt         *time.Time
+	NextRunAt         time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+func (q *Queries) GetJobSchedule(ctx context.Context, jobID uuid.UUID) (GetJobScheduleRow, error) {
 	row := q.db.QueryRow(ctx, getJobSchedule, jobID)
-	var i JobSchedule
+	var i GetJobScheduleRow
 	err := row.Scan(
 		&i.JobID,
 		&i.Status,
 		&i.RepeatIntervalSec,
-		&i.DoneRuns,
+		&i.ScheduledRuns,
 		&i.TargetRuns,
 		&i.LastRunAt,
 		&i.NextRunAt,

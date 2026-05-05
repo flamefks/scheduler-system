@@ -119,10 +119,10 @@ type JobSchedule struct {
 	JobID             uuid.UUID
 	Status            ScheduleStatus
 	RepeatIntervalSec int32
-	DoneRuns          int32
 	TargetRuns        int32
 	LastRunAt         *time.Time
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	ScheduledRuns     int32
 }

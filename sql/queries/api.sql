@@ -53,7 +53,7 @@ SELECT
     job_id,
     status,
     repeat_interval_sec,
-    done_runs,
+    scheduled_runs,
     target_runs,
     last_run_at,
     next_run_at,

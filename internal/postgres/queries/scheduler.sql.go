@@ -66,7 +66,7 @@ UPDATE job_schedules
 SET
     status = 'disabled'
 WHERE status = 'idle'
-    AND done_runs = target_runs
+    AND scheduled_runs = target_runs
 `
 
 func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) error {
