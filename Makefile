@@ -1,3 +1,5 @@
+SQLC_VERSION := 1.27.0
+
 test:
 	go test ./internal/...
 
@@ -8,5 +10,8 @@ bench:
 	go test ./internal/... -tags=integration -bench=. -benchmem -run=^$
 
 sqlc:
-	sqlc generate
-	
+	docker run --rm \
+		-v "$$PWD:/src" \
+		-w /src \
+		sqlc/sqlc:$(SQLC_VERSION) \
+		generate
