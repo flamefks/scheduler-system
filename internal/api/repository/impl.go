@@ -211,7 +211,6 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 
 	// fetcher config
 	if patch.FetcherConfig != nil {
-
 		var SetPayload bool = false
 		var SetHeaders bool = false
 
@@ -243,7 +242,6 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 
 	// deliver config
 	if patch.DeliverConfig != nil {
-
 		var SetPayload bool = false
 		var SetHeaders bool = false
 
@@ -260,7 +258,7 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 		}
 		if _, err := qtx.PatchJobIOConfig(ctx, db.PatchJobIOConfigParams{
 			JobID:      id,
-			Kind:       db.JobIoKindFetcher,
+			Kind:       db.JobIoKindDeliver,
 			SetPayload: SetPayload,
 			Payload:    payload,
 			SetHeaders: SetHeaders,
@@ -295,7 +293,7 @@ func (repo *Repository) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, 
 	if err != nil {
 		return err
 	}
-	_, err = repo.q.UpdateJobScheduleStatus(ctx, db.UpdateJobScheduleStatusParams{
+	err = repo.q.UpdateJobScheduleStatus(ctx, db.UpdateJobScheduleStatusParams{
 		Status: schedulerStatus,
 		JobID:  id,
 	})

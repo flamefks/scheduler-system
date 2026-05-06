@@ -46,19 +46,21 @@ INSERT INTO job_io_configs (
     payload,
     headers,
     target_url,
-    method
+    method,
+    json_schema
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 `
 
 type CreateJobIOConfigParams struct {
-	JobID     uuid.UUID
-	Kind      JobIoKind
-	Payload   []byte
-	Headers   []byte
-	TargetUrl string
-	Method    string
+	JobID      uuid.UUID
+	Kind       JobIoKind
+	Payload    []byte
+	Headers    []byte
+	TargetUrl  string
+	Method     string
+	JsonSchema []byte
 }
 
 // =========================
@@ -72,6 +74,7 @@ func (q *Queries) CreateJobIOConfig(ctx context.Context, arg CreateJobIOConfigPa
 		arg.Headers,
 		arg.TargetUrl,
 		arg.Method,
+		arg.JsonSchema,
 	)
 	return err
 }
@@ -245,21 +248,26 @@ SET
     headers = CASE
         WHEN $5::bool THEN $6
         ELSE headers
+    END,
+    json_schema = CASE 
+        WHEN $7::bool THEN $8
     END
-WHERE job_id = $7
-  AND kind = $8::job_io_kind
+WHERE job_id = $9
+  AND kind = $10::job_io_kind
 RETURNING job_id
 `
 
 type PatchJobIOConfigParams struct {
-	SetPayload bool
-	Payload    []byte
-	TargetUrl  *string
-	Method     *string
-	SetHeaders bool
-	Headers    []byte
-	JobID      uuid.UUID
-	Kind       JobIoKind
+	SetPayload    bool
+	Payload       []byte
+	TargetUrl     *string
+	Method        *string
+	SetHeaders    bool
+	Headers       []byte
+	SetJsonSchema bool
+	JsonSchema    []byte
+	JobID         uuid.UUID
+	Kind          JobIoKind
 }
 
 func (q *Queries) PatchJobIOConfig(ctx context.Context, arg PatchJobIOConfigParams) (uuid.UUID, error) {
@@ -270,6 +278,8 @@ func (q *Queries) PatchJobIOConfig(ctx context.Context, arg PatchJobIOConfigPara
 		arg.Method,
 		arg.SetHeaders,
 		arg.Headers,
+		arg.SetJsonSchema,
+		arg.JsonSchema,
 		arg.JobID,
 		arg.Kind,
 	)
@@ -343,16 +353,12 @@ func (q *Queries) UpdateJobName(ctx context.Context, arg UpdateJobNameParams) (u
 	return id, err
 }
 
-const updateJobScheduleStatus = `-- name: UpdateJobScheduleStatus :one
+const updateJobScheduleStatus = `-- name: UpdateJobScheduleStatus :exec
 UPDATE job_schedules
-SET
-    status = CASE 
-        WHEN status != 'running' AND $1::schedule_status != 'error' THEN $1
-        ELSE status 
-    END,
-    updated_at = NOW()
+SET status = $1, updated_at = NOW()
 WHERE job_id = $2
-RETURNING job_id
+    AND status != 'running'
+    AND $1::schedule_status IN ('idle', 'disabled')
 `
 
 type UpdateJobScheduleStatusParams struct {
@@ -360,9 +366,7 @@ type UpdateJobScheduleStatusParams struct {
 	JobID  uuid.UUID
 }
 
-func (q *Queries) UpdateJobScheduleStatus(ctx context.Context, arg UpdateJobScheduleStatusParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, updateJobScheduleStatus, arg.Status, arg.JobID)
-	var job_id uuid.UUID
-	err := row.Scan(&job_id)
-	return job_id, err
+func (q *Queries) UpdateJobScheduleStatus(ctx context.Context, arg UpdateJobScheduleStatusParams) error {
+	_, err := q.db.Exec(ctx, updateJobScheduleStatus, arg.Status, arg.JobID)
+	return err
 }

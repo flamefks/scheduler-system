@@ -52,7 +52,7 @@ UPDATE job_schedules
 SET
     status = 'idle',
     updated_at = NOW()
-WHERE status = 'active'
+WHERE status = 'running'
   AND NOW() - last_run_at > ($1::bigint * interval '1 second')
 `
 

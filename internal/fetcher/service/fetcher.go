@@ -122,7 +122,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return err, 0
 	}
-	return nil, 0
+	return nil, response.StatusCode
 }
 
 func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) error {

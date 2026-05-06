@@ -106,13 +106,14 @@ type Job struct {
 }
 
 type JobIoConfig struct {
-	JobID     uuid.UUID
-	Kind      JobIoKind
-	Payload   []byte
-	Headers   []byte
-	TargetUrl string
-	Method    string
-	CreatedAt time.Time
+	JobID      uuid.UUID
+	Kind       JobIoKind
+	Payload    []byte
+	Headers    []byte
+	TargetUrl  string
+	Method     string
+	CreatedAt  time.Time
+	JsonSchema []byte
 }
 
 type JobSchedule struct {

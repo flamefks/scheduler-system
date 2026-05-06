@@ -1,2 +1,8 @@
     response_schema JSONB NULL - отдельная таблица строго structed 
     retry_policy JSONB NOT NULL - добавление валидация ответа внешнего апи
+
+// Planning
+1) Fix status code answers on api
+2) Add metrics and fix logging 
+3) Make more stability and observ microserv (add statuses: fetch, deliver ...)
+4) Add grpc

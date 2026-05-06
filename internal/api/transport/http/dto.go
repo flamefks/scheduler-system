@@ -7,6 +7,23 @@ import (
 	"github.com/flamefks/scheduler-system/internal/shared/data"
 )
 
+type OptionalJSON struct {
+	Set   bool
+	Value json.RawMessage
+}
+
+func (o *OptionalJSON) UnmarshalJSON(data []byte) error {
+	o.Set = true
+
+	if string(data) == "null" {
+		o.Value = nil
+		return nil
+	}
+
+	o.Value = append(o.Value[:0], data...)
+	return nil
+}
+
 // =========================
 // CREATE
 // =========================

@@ -82,16 +82,12 @@ SET
 WHERE job_id = sqlc.arg(job_id)
 RETURNING job_id;
 
--- name: UpdateJobScheduleStatus :one
+-- name: UpdateJobScheduleStatus :exec
 UPDATE job_schedules
-SET
-    status = CASE 
-        WHEN status != 'running' AND sqlc.arg(status)::schedule_status != 'error' THEN sqlc.arg(status)
-        ELSE status 
-    END,
-    updated_at = NOW()
+SET status = sqlc.arg(status), updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)
-RETURNING job_id;
+    AND status != 'running'
+    AND sqlc.arg(status)::schedule_status IN ('idle', 'disabled');
 
 -- =========================
 -- IO CONFIGS
@@ -104,9 +100,10 @@ INSERT INTO job_io_configs (
     payload,
     headers,
     target_url,
-    method
+    method,
+    json_schema
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 );
 
 -- name: PatchJobIOConfig :one
@@ -121,6 +118,9 @@ SET
     headers = CASE
         WHEN sqlc.arg(set_headers)::bool THEN sqlc.narg(headers)
         ELSE headers
+    END,
+    json_schema = CASE 
+        WHEN sqlc.arg(set_json_schema)::bool THEN sqlc.narg(json_schema)
     END
 WHERE job_id = sqlc.arg(job_id)
   AND kind = sqlc.arg(kind)::job_io_kind

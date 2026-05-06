@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	b, err = yaml.Marshal(logCfg)
+	b, err = yaml.Marshal(coreCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
