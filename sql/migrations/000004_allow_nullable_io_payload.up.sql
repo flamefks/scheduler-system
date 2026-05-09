@@ -1,0 +1,2 @@
+ALTER TABLE job_io_configs
+ALTER COLUMN payload DROP NOT NULL;

@@ -36,7 +36,7 @@ func NewFetcherService(logger *slog.Logger, publisher natsqueue.AbstractPublishe
 
 func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsHeader nats.Header) (error, int) {
 	strJobId := natsHeader.Get("job-id")
-	jobId, err := utils.GetJobIDFromHeader(strJobId)
+	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
 		f.logger.Error(
 			"invalid_job_id_header",
@@ -64,14 +64,16 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		slog.Any("config", &reqConfig),
 	)
 
-	var headerMap map[string]string
-	if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
-		f.logger.Error(
-			"failed_unmarshal_headers",
-			slog.Any("job_id", jobId),
-			slog.Any("err", err),
-		)
-		return err, 0
+	headerMap := map[string]string{}
+	if len(reqConfig.Headers) > 0 {
+		if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
+			f.logger.Error(
+				"failed_unmarshal_headers",
+				slog.Any("job_id", jobId),
+				slog.Any("err", err),
+			)
+			return err, 0
+		}
 	}
 
 	request := &data.Request{
@@ -110,10 +112,16 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return err, 0
 	}
+	if len(reqConfig.JsonSchema) > 0 {
+		if err = utils.ValidateRawMessageWithSchema(reqConfig.JsonSchema, bytesMsg); err != nil {
+			return fmt.Errorf("%v: %v", utils.ValidateSchemaError, err), 0
+		}
+	}
 
 	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, bytesMsg, map[string]string{
 		"job-id": strJobId,
 	})
+
 	if err != nil {
 		f.logger.Error(
 			"failed_publish_data",
@@ -127,7 +135,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 
 func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
-	jobId, err := utils.GetJobIDFromHeader(strJobId)
+	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
 		f.logger.Error(
 			"invalid_job_id_header",

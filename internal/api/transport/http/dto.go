@@ -7,12 +7,12 @@ import (
 	"github.com/flamefks/scheduler-system/internal/shared/data"
 )
 
-type OptionalJSON struct {
+type OptionalRawMessage struct {
 	Set   bool
 	Value json.RawMessage
 }
 
-func (o *OptionalJSON) UnmarshalJSON(data []byte) error {
+func (o *OptionalRawMessage) UnmarshalJSON(data []byte) error {
 	o.Set = true
 
 	if string(data) == "null" {
@@ -35,10 +35,11 @@ type ScheduleBlockCreateJobRequest struct {
 }
 
 type IOBlockCreateJobRequest struct {
-	TargetURL string          `json:"target_url"`
-	Method    string          `json:"method"`
-	Payload   json.RawMessage `json:"payload"`
-	Headers   json.RawMessage `json:"headers"`
+	TargetURL  string          `json:"target_url"`
+	Method     string          `json:"method"`
+	Payload    json.RawMessage `json:"payload"`
+	Headers    json.RawMessage `json:"headers"`
+	JsonSchema json.RawMessage `json:"json_schema"`
 }
 
 type CreateJobRequest struct {
@@ -61,8 +62,9 @@ type ScheduleBlockPatchJobRequest struct {
 }
 
 type IOBlockPatchJobRequest struct {
-	Payload *json.RawMessage `json:"payload"`
-	Headers *json.RawMessage `json:"headers"`
+	Payload    OptionalRawMessage `json:"payload"`
+	Headers    OptionalRawMessage `json:"headers"`
+	JsonSchema OptionalRawMessage `json:"json_schema"`
 }
 
 type PatchJobRequest struct {
@@ -71,11 +73,6 @@ type PatchJobRequest struct {
 
 	FetcherConfig *IOBlockPatchJobRequest `json:"fetcher_config"`
 	DeliverConfig *IOBlockPatchJobRequest `json:"deliver_config"`
-}
-
-// UpdateStatusJob
-type UpdateStatusRequest struct {
-	Status string `json:"status"`
 }
 
 // =========================

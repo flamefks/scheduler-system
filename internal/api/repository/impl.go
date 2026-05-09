@@ -2,14 +2,17 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/flamefks/scheduler-system/internal/api/apperrors"
 	"github.com/flamefks/scheduler-system/internal/api/domain"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -32,7 +35,7 @@ func NewRepository(pool *pgxpool.Pool, q *db.Queries) *Repository {
 func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
 	tx, err := repo.pool.Begin(ctx)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("begin tx: %w", err)
+		return uuid.Nil, fmt.Errorf("begin_transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -45,7 +48,7 @@ func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID
 		ID:   jobID,
 		Name: job.Name,
 	}); err != nil {
-		return uuid.Nil, fmt.Errorf("create job: %w", err)
+		return uuid.Nil, fmt.Errorf("create_job_table: %w", err)
 	}
 
 	// schedule
@@ -55,35 +58,37 @@ func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID
 		RepeatIntervalSec: job.Schedule.RepeatIntervalSec,
 		TargetRuns:        job.Schedule.TargetRuns,
 	}); err != nil {
-		return uuid.Nil, fmt.Errorf("create schedule: %w", err)
+		return uuid.Nil, fmt.Errorf("create_schedule_table: %w", err)
 	}
 
 	// fetcher config
 	if err := qtx.CreateJobIOConfig(ctx, db.CreateJobIOConfigParams{
-		JobID:     jobID,
-		Kind:      db.JobIoKindFetcher,
-		Payload:   job.FetcherConfig.Payload,
-		Headers:   job.FetcherConfig.Headers,
-		TargetUrl: job.FetcherConfig.TargetUrl,
-		Method:    job.FetcherConfig.Method,
+		JobID:      jobID,
+		Kind:       db.JobIoKindFetcher,
+		Payload:    job.FetcherConfig.Payload,
+		Headers:    job.FetcherConfig.Headers,
+		TargetUrl:  job.FetcherConfig.TargetUrl,
+		Method:     job.FetcherConfig.Method,
+		JsonSchema: job.FetcherConfig.JsonSchema,
 	}); err != nil {
-		return uuid.Nil, fmt.Errorf("create fetcher config: %w", err)
+		return uuid.Nil, fmt.Errorf("create_fetcher_config_table: %w", err)
 	}
 
 	// deliver config
 	if err := qtx.CreateJobIOConfig(ctx, db.CreateJobIOConfigParams{
-		JobID:     jobID,
-		Kind:      db.JobIoKindDeliver,
-		Payload:   job.DeliverConfig.Payload,
-		Headers:   job.DeliverConfig.Headers,
-		TargetUrl: job.DeliverConfig.TargetUrl,
-		Method:    job.DeliverConfig.Method,
+		JobID:      jobID,
+		Kind:       db.JobIoKindDeliver,
+		Payload:    job.DeliverConfig.Payload,
+		Headers:    job.DeliverConfig.Headers,
+		TargetUrl:  job.DeliverConfig.TargetUrl,
+		Method:     job.DeliverConfig.Method,
+		JsonSchema: job.DeliverConfig.JsonSchema,
 	}); err != nil {
-		return uuid.Nil, fmt.Errorf("create deliver config: %w", err)
+		return uuid.Nil, fmt.Errorf("create_deliver_config_table: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, fmt.Errorf("commit: %w", err)
+		return uuid.Nil, fmt.Errorf("make_commit: %w", err)
 	}
 
 	return jobID, nil
@@ -96,17 +101,29 @@ func (repo *Repository) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID
 func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job, error) {
 	jobDb, err := repo.q.GetJob(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("get job: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get_job: %w", apperrors.ErrNotFound)
+		} else {
+			return nil, err
+		}
 	}
 
 	schedule, err := repo.q.GetJobSchedule(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("get schedule: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get_schedule: %w", apperrors.ErrNotFound)
+		} else {
+			return nil, err
+		}
 	}
 
 	configs, err := repo.q.ListJobIOConfigs(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("get configs: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("get_configs: %w", apperrors.ErrNotFound)
+		} else {
+			return nil, err
+		}
 	}
 
 	var fetcher, deliver data.IOConfig
@@ -115,17 +132,19 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job
 		switch c.Kind {
 		case db.JobIoKindFetcher:
 			fetcher = data.IOConfig{
-				Payload:   c.Payload,
-				Headers:   c.Headers,
-				TargetUrl: c.TargetUrl,
-				Method:    c.Method,
+				Payload:    c.Payload,
+				Headers:    c.Headers,
+				JsonSchema: c.JsonSchema,
+				TargetUrl:  c.TargetUrl,
+				Method:     c.Method,
 			}
 		case db.JobIoKindDeliver:
 			deliver = data.IOConfig{
-				Payload:   c.Payload,
-				Headers:   c.Headers,
-				TargetUrl: c.TargetUrl,
-				Method:    c.Method,
+				Payload:    c.Payload,
+				Headers:    c.Headers,
+				JsonSchema: c.JsonSchema,
+				TargetUrl:  c.TargetUrl,
+				Method:     c.Method,
 			}
 		}
 	}
@@ -158,7 +177,7 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job
 func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error {
 	tx, err := repo.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return fmt.Errorf("begin_transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -170,7 +189,7 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 			ID:   id,
 			Name: *patch.Name,
 		}); err != nil {
-			return fmt.Errorf("update job: %w", err)
+			return fmt.Errorf("patch_job_table: %w", err)
 		}
 	}
 
@@ -190,7 +209,7 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 			setScheduleStatus = true
 			statusAsEnum, err = getJobStatusEnum(*patch.Schedule.Status)
 			if err != nil {
-				return fmt.Errorf("patch schedule error: %w", err)
+				return fmt.Errorf("patch_schedule_table: %w", err)
 			}
 		}
 
@@ -205,73 +224,48 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 			},
 			JobID: id,
 		}); err != nil {
-			return fmt.Errorf("patch schedule: %w", err)
+			return fmt.Errorf("patch_schedule_table: %w", err)
 		}
 	}
 
 	// fetcher config
 	if patch.FetcherConfig != nil {
-		var SetPayload bool = false
-		var SetHeaders bool = false
-
-		var payload []byte
-		var Headers []byte
-
-		if patch.FetcherConfig.Headers != nil {
-			SetHeaders = true
-			Headers = *patch.FetcherConfig.Headers
-		}
-		if patch.FetcherConfig.Payload != nil {
-			SetPayload = true
-			payload = *patch.FetcherConfig.Payload
-		}
-
 		if _, err := qtx.PatchJobIOConfig(ctx, db.PatchJobIOConfigParams{
-			JobID:      id,
-			Kind:       db.JobIoKindFetcher,
-			SetPayload: SetPayload,
-			Payload:    payload,
-			SetHeaders: SetHeaders,
-			Headers:    Headers,
-			TargetUrl:  patch.FetcherConfig.TargetUrl,
-			Method:     patch.FetcherConfig.Method,
+			JobID:         id,
+			Kind:          db.JobIoKindFetcher,
+			SetPayload:    patch.FetcherConfig.Payload.Set,
+			Payload:       patch.FetcherConfig.Payload.Value,
+			SetHeaders:    patch.FetcherConfig.Headers.Set,
+			Headers:       patch.FetcherConfig.Headers.Value,
+			SetJsonSchema: patch.FetcherConfig.JsonSchema.Set,
+			JsonSchema:    patch.FetcherConfig.JsonSchema.Value,
+			TargetUrl:     patch.FetcherConfig.TargetUrl,
+			Method:        patch.FetcherConfig.Method,
 		}); err != nil {
-			return fmt.Errorf("patch fetcher config: %w", err)
+			return fmt.Errorf("patch_fetcher_config_table: %w", err)
 		}
 	}
 
 	// deliver config
 	if patch.DeliverConfig != nil {
-		var SetPayload bool = false
-		var SetHeaders bool = false
-
-		var payload []byte
-		var Headers []byte
-
-		if patch.DeliverConfig.Headers != nil {
-			SetHeaders = true
-			Headers = *patch.DeliverConfig.Headers
-		}
-		if patch.DeliverConfig.Payload != nil {
-			SetPayload = true
-			payload = *patch.DeliverConfig.Payload
-		}
 		if _, err := qtx.PatchJobIOConfig(ctx, db.PatchJobIOConfigParams{
-			JobID:      id,
-			Kind:       db.JobIoKindDeliver,
-			SetPayload: SetPayload,
-			Payload:    payload,
-			SetHeaders: SetHeaders,
-			Headers:    Headers,
-			TargetUrl:  patch.DeliverConfig.TargetUrl,
-			Method:     patch.DeliverConfig.Method,
+			JobID:         id,
+			Kind:          db.JobIoKindDeliver,
+			SetPayload:    patch.DeliverConfig.Payload.Set,
+			Payload:       patch.DeliverConfig.Payload.Value,
+			SetHeaders:    patch.DeliverConfig.Headers.Set,
+			Headers:       patch.DeliverConfig.Headers.Value,
+			SetJsonSchema: patch.DeliverConfig.JsonSchema.Set,
+			JsonSchema:    patch.DeliverConfig.JsonSchema.Value,
+			TargetUrl:     patch.DeliverConfig.TargetUrl,
+			Method:        patch.DeliverConfig.Method,
 		}); err != nil {
-			return fmt.Errorf("patch deliver config: %w", err)
+			return fmt.Errorf("patch_deliver_config_table: %w", err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return fmt.Errorf("make_commit: %w", err)
 	}
 
 	return nil
@@ -286,19 +280,23 @@ func (repo *Repository) DeleteJob(ctx context.Context, id uuid.UUID) error {
 }
 
 // =========================
-// UpdateScheduleStatus
+// ACTIVATE
 // =========================
-func (repo *Repository) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, status string) error {
-	schedulerStatus, err := getJobStatusEnum(status)
-	if err != nil {
-		return err
+
+func (repo *Repository) ActivateJob(ctx context.Context, id uuid.UUID) error {
+	if _, err := repo.q.ActivateJob(ctx, id); err != nil {
+		return repo.mapScheduleCommandError(ctx, id, "activate_job", err)
 	}
-	err = repo.q.UpdateJobScheduleStatus(ctx, db.UpdateJobScheduleStatusParams{
-		Status: schedulerStatus,
-		JobID:  id,
-	})
-	if err != nil {
-		return fmt.Errorf("Failed update job status: %w", err)
+	return nil
+}
+
+// =========================
+// DEACTIVATE
+// =========================
+
+func (repo *Repository) DeactivateJob(ctx context.Context, id uuid.UUID) error {
+	if _, err := repo.q.DeactivateJob(ctx, id); err != nil {
+		return repo.mapScheduleCommandError(ctx, id, "deactivate_job", err)
 	}
 	return nil
 }
@@ -312,6 +310,21 @@ func getJobStatusEnum(rowStatus string) (db.ScheduleStatus, error) {
 	case db.ScheduleStatusIdle, db.ScheduleStatusRunning, db.ScheduleStatusError, db.ScheduleStatusDisabled:
 		return scheduleStatus, nil
 	default:
-		return "", fmt.Errorf("invalid scheduleStatus: %s", rowStatus)
+		return "", fmt.Errorf("update_schedule_status to %s: %w", rowStatus, apperrors.ErrInvalidStatus)
 	}
+}
+
+func (repo *Repository) mapScheduleCommandError(ctx context.Context, id uuid.UUID, operation string, err error) error {
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+
+	if _, getErr := repo.q.GetJobSchedule(ctx, id); getErr != nil {
+		if errors.Is(getErr, pgx.ErrNoRows) {
+			return fmt.Errorf("%s: %w", operation, apperrors.ErrNotFound)
+		}
+		return fmt.Errorf("%s check_schedule: %w", operation, getErr)
+	}
+
+	return fmt.Errorf("%s: %w", operation, apperrors.ErrStatusConflict)
 }

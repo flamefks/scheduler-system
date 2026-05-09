@@ -158,7 +158,12 @@ func seedJobForBench(b *testing.B, repo *Repository, name string) uuid.UUID {
 func strPtrBench(s string) *string        { return &s }
 func i32PtrBench(v int32) *int32          { return &v }
 func timePtrBench(v time.Time) *time.Time { return &v }
-func bytesPtrBench(v []byte) *[]byte      { return &v }
+func jsonFieldBench(v []byte) domain.PatchJSONField {
+	return domain.PatchJSONField{
+		Set:   true,
+		Value: v,
+	}
+}
 
 func BenchmarkRepository_CreateJob_Integration(b *testing.B) {
 	tdb := setupBenchRepo(b)
@@ -217,19 +222,23 @@ func BenchmarkRepository_GetJobByID_Integration(b *testing.B) {
 	}
 }
 
-func BenchmarkRepository_UpdateScheduleStatus_Integration(b *testing.B) {
+func BenchmarkRepository_ActivateDeactivateJob_Integration(b *testing.B) {
 	tdb := setupBenchRepo(b)
 	repo := tdb.Repo
 	ctx := context.Background()
 
 	id := seedJobForBench(b, repo, "bench-status")
-	statuses := []string{"running", "idle"}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := repo.UpdateScheduleStatus(ctx, id, statuses[i%2])
+		var err error
+		if i%2 == 0 {
+			err = repo.DeactivateJob(ctx, id)
+		} else {
+			err = repo.ActivateJob(ctx, id)
+		}
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -288,8 +297,8 @@ func BenchmarkRepository_PatchJob_FetcherConfig_Integration(b *testing.B) {
 
 		patch := &domain.PatchJobModel{
 			FetcherConfig: &domain.PatchIOConfig{
-				Payload:   bytesPtrBench(payload),
-				Headers:   bytesPtrBench(header),
+				Payload:   jsonFieldBench(payload),
+				Headers:   jsonFieldBench(header),
 				TargetUrl: strPtrBench(url),
 				Method:    strPtrBench(method),
 			},
