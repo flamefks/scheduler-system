@@ -16,11 +16,17 @@ type PatchScheduleModel struct {
 	Status            *string
 }
 
+type PatchJSONField struct {
+	Set   bool
+	Value json.RawMessage
+}
+
 type PatchIOConfig struct {
-	Payload   *json.RawMessage
-	Headers   *json.RawMessage
-	TargetUrl *string
-	Method    *string
+	Payload    PatchJSONField
+	Headers    PatchJSONField
+	JsonSchema PatchJSONField
+	TargetUrl  *string
+	Method     *string
 }
 
 type PatchJobModel struct {

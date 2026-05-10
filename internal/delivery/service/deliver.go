@@ -12,6 +12,7 @@ import (
 	"github.com/flamefks/scheduler-system/internal/delivery/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
+	natsqueue "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/flamefks/scheduler-system/internal/shared/utils"
 	"github.com/nats-io/nats.go"
 )
@@ -33,7 +34,7 @@ func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo) *Deliv
 func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) (error, int) {
 
 	strJobId := natsHeader.Get("job-id")
-	jobId, err := utils.GetJobIDFromHeader(strJobId)
+	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
 		ds.logger.Error(
 			"invalid_job_id_header",
@@ -61,14 +62,16 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 		slog.Any("config", &reqConfig),
 	)
 
-	var headerMap map[string]string
-	if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
-		ds.logger.Error(
-			"failed_unmarshal_config_header",
-			slog.Any("job_id", jobId),
-			slog.Any("err", err),
-		)
-		return err, 0
+	headerMap := map[string]string{}
+	if len(reqConfig.Headers) > 0 {
+		if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
+			ds.logger.Error(
+				"failed_unmarshal_config_header",
+				slog.Any("job_id", jobId),
+				slog.Any("err", err),
+			)
+			return err, 0
+		}
 	}
 
 	request := &data.Request{
@@ -107,7 +110,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 
 func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
-	jobId, err := utils.GetJobIDFromHeader(strJobId)
+	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
 		ds.logger.Error(
 			"invalid_job_id_header",

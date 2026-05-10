@@ -3,8 +3,13 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 
 	"github.com/santhosh-tekuri/jsonschema"
+)
+
+var (
+	ValidateSchemaError = errors.New("Error validating schema")
 )
 
 func ValidateRawMessageWithSchema(

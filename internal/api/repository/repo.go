@@ -13,5 +13,6 @@ type PostgresRepo interface {
 	DeleteJob(ctx context.Context, id uuid.UUID) error
 	GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job, error)
 	PatchJob(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error
-	UpdateScheduleStatus(ctx context.Context, id uuid.UUID, status string) error
+	ActivateJob(ctx context.Context, id uuid.UUID) error
+	DeactivateJob(ctx context.Context, id uuid.UUID) error
 }

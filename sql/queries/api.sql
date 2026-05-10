@@ -82,12 +82,19 @@ SET
 WHERE job_id = sqlc.arg(job_id)
 RETURNING job_id;
 
--- name: UpdateJobScheduleStatus :exec
+-- name: ActivateJob :one
 UPDATE job_schedules
-SET status = sqlc.arg(status), updated_at = NOW()
+SET status = 'idle', updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)
     AND status != 'running'
-    AND sqlc.arg(status)::schedule_status IN ('idle', 'disabled');
+RETURNING job_id;
+
+-- name: DeactivateJob :one
+UPDATE job_schedules
+SET status = 'disabled', updated_at = NOW()
+WHERE job_id = sqlc.arg(job_id)
+    AND status != 'running'
+RETURNING job_id;
 
 -- =========================
 -- IO CONFIGS
@@ -121,6 +128,7 @@ SET
     END,
     json_schema = CASE 
         WHEN sqlc.arg(set_json_schema)::bool THEN sqlc.narg(json_schema)
+        ELSE json_schema
     END
 WHERE job_id = sqlc.arg(job_id)
   AND kind = sqlc.arg(kind)::job_io_kind
@@ -132,6 +140,7 @@ SELECT
     kind,
     payload,
     headers,
+    json_schema,
     target_url,
     method
 FROM job_io_configs

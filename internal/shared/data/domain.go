@@ -8,10 +8,11 @@ import (
 )
 
 type IOConfig struct {
-	Payload   json.RawMessage
-	Headers   json.RawMessage
-	TargetUrl string
-	Method    string
+	Payload    json.RawMessage
+	Headers    json.RawMessage
+	JsonSchema json.RawMessage
+	TargetUrl  string
+	Method     string
 }
 
 type Schedule struct {

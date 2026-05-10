@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"strings"
 	"testing"
 
 	"github.com/flamefks/scheduler-system/internal/api/domain"
@@ -14,11 +13,12 @@ import (
 )
 
 type mockRepo struct {
-	createJobFn            func(ctx context.Context, job *data.Job) (uuid.UUID, error)
-	deleteJobFn            func(ctx context.Context, id uuid.UUID) error
-	getJobByIDFn           func(ctx context.Context, id uuid.UUID) (*data.Job, error)
-	patchJobFn             func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error
-	updateScheduleStatusFn func(ctx context.Context, id uuid.UUID, status string) error
+	createJobFn     func(ctx context.Context, job *data.Job) (uuid.UUID, error)
+	deleteJobFn     func(ctx context.Context, id uuid.UUID) error
+	getJobByIDFn    func(ctx context.Context, id uuid.UUID) (*data.Job, error)
+	patchJobFn      func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error
+	activateJobFn   func(ctx context.Context, id uuid.UUID) error
+	deactivateJobFn func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockRepo) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
@@ -37,8 +37,12 @@ func (m *mockRepo) PatchJob(ctx context.Context, patch *domain.PatchJobModel, id
 	return m.patchJobFn(ctx, patch, id)
 }
 
-func (m *mockRepo) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return m.updateScheduleStatusFn(ctx, id, status)
+func (m *mockRepo) ActivateJob(ctx context.Context, id uuid.UUID) error {
+	return m.activateJobFn(ctx, id)
+}
+
+func (m *mockRepo) DeactivateJob(ctx context.Context, id uuid.UUID) error {
+	return m.deactivateJobFn(ctx, id)
 }
 
 func testLogger() *slog.Logger {
@@ -102,9 +106,6 @@ func TestApiService_CreateJob(t *testing.T) {
 		if gotID != uuid.Nil {
 			t.Fatalf("expected nil uuid, got %s", gotID)
 		}
-		if !strings.Contains(err.Error(), "Error on creating job") {
-			t.Fatalf("unexpected error text: %v", err)
-		}
 		if !errors.Is(err, repoErr) {
 			t.Fatal("expected wrapped repo error")
 		}
@@ -144,9 +145,6 @@ func TestApiService_DeleteJob(t *testing.T) {
 		err := svc.DeleteJob(context.Background(), jobID)
 		if err == nil {
 			t.Fatal("expected error")
-		}
-		if !strings.Contains(err.Error(), "Error on removing job") {
-			t.Fatalf("unexpected error text: %v", err)
 		}
 		if !errors.Is(err, repoErr) {
 			t.Fatal("expected wrapped repo error")
@@ -196,8 +194,8 @@ func TestApiService_GetJobByID(t *testing.T) {
 		if got != nil {
 			t.Fatal("expected nil job")
 		}
-		if !strings.Contains(err.Error(), "error getting job by id") {
-			t.Fatalf("unexpected error text: %v", err)
+		if !errors.Is(err, repoErr) {
+			t.Fatal("expected original repo error")
 		}
 	})
 }
@@ -240,24 +238,20 @@ func TestApiService_PatchJob(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !strings.Contains(err.Error(), "error patching job by id") {
-			t.Fatalf("unexpected error text: %v", err)
+		if !errors.Is(err, repoErr) {
+			t.Fatal("expected wrapped repo error")
 		}
 	})
 }
 
-func TestApiService_UpdateJobStatus(t *testing.T) {
+func TestApiService_ActivateJob(t *testing.T) {
 	jobID := uuid.New()
-	status := "running"
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockRepo{
-			updateScheduleStatusFn: func(ctx context.Context, id uuid.UUID, gotStatus string) error {
+			activateJobFn: func(ctx context.Context, id uuid.UUID) error {
 				if id != jobID {
 					t.Fatalf("expected %s, got %s", jobID, id)
-				}
-				if gotStatus != status {
-					t.Fatalf("expected %s, got %s", status, gotStatus)
 				}
 				return nil
 			},
@@ -265,7 +259,7 @@ func TestApiService_UpdateJobStatus(t *testing.T) {
 
 		svc := NewApiService(testLogger(), repo)
 
-		if err := svc.UpdateJobStatus(context.Background(), jobID, status); err != nil {
+		if err := svc.ActivateJob(context.Background(), jobID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
@@ -273,14 +267,54 @@ func TestApiService_UpdateJobStatus(t *testing.T) {
 	t.Run("repo error", func(t *testing.T) {
 		repoErr := errors.New("status update failed")
 		repo := &mockRepo{
-			updateScheduleStatusFn: func(ctx context.Context, id uuid.UUID, gotStatus string) error {
+			activateJobFn: func(ctx context.Context, id uuid.UUID) error {
 				return repoErr
 			},
 		}
 
 		svc := NewApiService(testLogger(), repo)
 
-		err := svc.UpdateJobStatus(context.Background(), jobID, status)
+		err := svc.ActivateJob(context.Background(), jobID)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, repoErr) {
+			t.Fatal("expected original repo error")
+		}
+	})
+}
+
+func TestApiService_DeactivateJob(t *testing.T) {
+	jobID := uuid.New()
+
+	t.Run("success", func(t *testing.T) {
+		repo := &mockRepo{
+			deactivateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				if id != jobID {
+					t.Fatalf("expected %s, got %s", jobID, id)
+				}
+				return nil
+			},
+		}
+
+		svc := NewApiService(testLogger(), repo)
+
+		if err := svc.DeactivateJob(context.Background(), jobID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("repo error", func(t *testing.T) {
+		repoErr := errors.New("status update failed")
+		repo := &mockRepo{
+			deactivateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				return repoErr
+			},
+		}
+
+		svc := NewApiService(testLogger(), repo)
+
+		err := svc.DeactivateJob(context.Background(), jobID)
 		if err == nil {
 			t.Fatal("expected error")
 		}

@@ -191,6 +191,40 @@ func TestFetcherService_Handle(t *testing.T) {
 		}
 	})
 
+	t.Run("nil config headers are treated as empty", func(t *testing.T) {
+		repo := &mockFetcherRepo{
+			getConfigFn: func(ctx context.Context, kind string, gotJobID uuid.UUID) (*data.IOConfig, error) {
+				return &data.IOConfig{
+					TargetUrl: "https://example.test/fetch",
+					Method:    http.MethodGet,
+					Headers:   nil,
+				}, nil
+			},
+		}
+		publisher := &mockFetcherPublisher{
+			publishFn: func(ctx context.Context, subject string, payload []byte, headers map[string]string) error {
+				return nil
+			},
+		}
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc.httpClient = &mockFetcherHTTPClient{
+			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
+				if len(req.Headers) != 0 {
+					t.Fatalf("expected empty headers, got %#v", req.Headers)
+				}
+				return &data.ExternalResponse{StatusCode: http.StatusOK}, nil
+			},
+		}
+
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if statusCode != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, statusCode)
+		}
+	})
+
 	t.Run("http error returns response status", func(t *testing.T) {
 		repo := &mockFetcherRepo{
 			getConfigFn: func(ctx context.Context, kind string, gotJobID uuid.UUID) (*data.IOConfig, error) {

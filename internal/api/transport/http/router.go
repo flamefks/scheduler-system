@@ -19,7 +19,9 @@ func NewRouter(h *ApiHandler) http.Handler {
 		r.Post("/jobs", h.CreateJob)
 		r.Get("/jobs/{id}", h.GetJob)
 		r.Patch("/jobs/{id}", h.UpdateJob)
-		r.Patch("/jobs/{id}/status", h.UpdateJob)
+		r.Post("/jobs/{id}/activate", h.ActivateJob)
+		r.Post("/jobs/{id}/deactivate", h.DeactivateJob)
+
 		r.Delete("/jobs/{id}", h.DeleteJob)
 
 	})

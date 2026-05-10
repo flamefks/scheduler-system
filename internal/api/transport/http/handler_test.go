@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -12,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flamefks/scheduler-system/internal/api/apperrors"
 	"github.com/flamefks/scheduler-system/internal/api/domain"
 	apiservice "github.com/flamefks/scheduler-system/internal/api/service"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -20,11 +20,12 @@ import (
 )
 
 type mockRepo struct {
-	createJobFn            func(ctx context.Context, job *data.Job) (uuid.UUID, error)
-	deleteJobFn            func(ctx context.Context, id uuid.UUID) error
-	getJobByIDFn           func(ctx context.Context, id uuid.UUID) (*data.Job, error)
-	patchJobFn             func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error
-	updateScheduleStatusFn func(ctx context.Context, id uuid.UUID, status string) error
+	createJobFn     func(ctx context.Context, job *data.Job) (uuid.UUID, error)
+	deleteJobFn     func(ctx context.Context, id uuid.UUID) error
+	getJobByIDFn    func(ctx context.Context, id uuid.UUID) (*data.Job, error)
+	patchJobFn      func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error
+	activateJobFn   func(ctx context.Context, id uuid.UUID) error
+	deactivateJobFn func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockRepo) CreateJob(ctx context.Context, job *data.Job) (uuid.UUID, error) {
@@ -43,8 +44,12 @@ func (m *mockRepo) PatchJob(ctx context.Context, patch *domain.PatchJobModel, id
 	return m.patchJobFn(ctx, patch, id)
 }
 
-func (m *mockRepo) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return m.updateScheduleStatusFn(ctx, id, status)
+func (m *mockRepo) ActivateJob(ctx context.Context, id uuid.UUID) error {
+	return m.activateJobFn(ctx, id)
+}
+
+func (m *mockRepo) DeactivateJob(ctx context.Context, id uuid.UUID) error {
+	return m.deactivateJobFn(ctx, id)
 }
 
 func handlerLogger() *slog.Logger {
@@ -83,8 +88,8 @@ func TestCheckUUID(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if !errors.Is(err, apperrors.ErrInvalidUUID) {
+			t.Fatalf("expected ErrInvalidUUID, got %v", err)
 		}
 	})
 }
@@ -217,15 +222,34 @@ func TestApiHandler_GetJob(t *testing.T) {
 
 		h.GetJob(w, req)
 
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if w.Code != stdhttp.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", w.Code)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		repo := &mockRepo{
+			getJobByIDFn: func(ctx context.Context, id uuid.UUID) (*data.Job, error) {
+				return nil, apperrors.ErrNotFound
+			},
+		}
+
+		h := newHandler(repo)
+		req := httptest.NewRequest(stdhttp.MethodGet, "/jobs/"+jobID.String(), nil)
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.GetJob(w, req)
+
+		if w.Code != stdhttp.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
 	})
 
 	t.Run("service error", func(t *testing.T) {
 		repo := &mockRepo{
 			getJobByIDFn: func(ctx context.Context, id uuid.UUID) (*data.Job, error) {
-				return nil, errors.New("not found")
+				return nil, errors.New("db failed")
 			},
 		}
 
@@ -289,6 +313,54 @@ func TestApiHandler_UpdateJob(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit null json fields", func(t *testing.T) {
+		repo := &mockRepo{
+			patchJobFn: func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error {
+				if id != jobID {
+					t.Fatalf("expected %s, got %s", jobID, id)
+				}
+				if patch.FetcherConfig == nil {
+					t.Fatal("expected fetcher config patch")
+				}
+				if !patch.FetcherConfig.Headers.Set {
+					t.Fatal("expected headers to be marked as set")
+				}
+				if patch.FetcherConfig.Headers.Value != nil {
+					t.Fatalf("expected nil headers value, got %s", string(patch.FetcherConfig.Headers.Value))
+				}
+				if !patch.FetcherConfig.JsonSchema.Set {
+					t.Fatal("expected json_schema to be marked as set")
+				}
+				if patch.FetcherConfig.JsonSchema.Value != nil {
+					t.Fatalf("expected nil json_schema value, got %s", string(patch.FetcherConfig.JsonSchema.Value))
+				}
+				if patch.FetcherConfig.Payload.Set {
+					t.Fatal("did not expect absent payload to be marked as set")
+				}
+				return nil
+			},
+		}
+
+		h := newHandler(repo)
+
+		body := []byte(`{
+			"fetcher_config":{
+				"headers":null,
+				"json_schema":null
+			}
+		}`)
+
+		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/"+jobID.String(), bytes.NewReader(body))
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.UpdateJob(w, req)
+
+		if w.Code != stdhttp.StatusOK {
+			t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+		}
+	})
+
 	t.Run("bad uuid", func(t *testing.T) {
 		h := newHandler(&mockRepo{})
 
@@ -298,8 +370,8 @@ func TestApiHandler_UpdateJob(t *testing.T) {
 
 		h.UpdateJob(w, req)
 
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if w.Code != stdhttp.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", w.Code)
 		}
 	})
 
@@ -314,6 +386,26 @@ func TestApiHandler_UpdateJob(t *testing.T) {
 
 		if w.Code != stdhttp.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("conflict error", func(t *testing.T) {
+		repo := &mockRepo{
+			patchJobFn: func(ctx context.Context, patch *domain.PatchJobModel, id uuid.UUID) error {
+				return apperrors.ErrStatusConflict
+			},
+		}
+
+		h := newHandler(repo)
+
+		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/"+jobID.String(), bytes.NewReader([]byte(`{"name":"x"}`)))
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.UpdateJob(w, req)
+
+		if w.Code != stdhttp.StatusConflict {
+			t.Fatalf("expected 409, got %d", w.Code)
 		}
 	})
 
@@ -383,17 +475,14 @@ func TestApiHandler_DeleteJob(t *testing.T) {
 	})
 }
 
-func TestApiHandler_UpdateJobStatus(t *testing.T) {
+func TestApiHandler_ActivateJob(t *testing.T) {
 	jobID := uuid.New()
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockRepo{
-			updateScheduleStatusFn: func(ctx context.Context, id uuid.UUID, status string) error {
+			activateJobFn: func(ctx context.Context, id uuid.UUID) error {
 				if id != jobID {
 					t.Fatalf("expected %s, got %s", jobID, id)
-				}
-				if status != "running" {
-					t.Fatalf("unexpected status: %s", status)
 				}
 				return nil
 			},
@@ -401,12 +490,11 @@ func TestApiHandler_UpdateJobStatus(t *testing.T) {
 
 		h := newHandler(repo)
 
-		body, _ := json.Marshal(UpdateStatusRequest{Status: "running"})
-		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/"+jobID.String()+"/status", bytes.NewReader(body))
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/"+jobID.String()+"/activate", nil)
 		req = withURLParam(req, "id", jobID.String())
 		w := httptest.NewRecorder()
 
-		h.UpdateJobStatus(w, req)
+		h.ActivateJob(w, req)
 
 		if w.Code != stdhttp.StatusOK {
 			t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
@@ -416,49 +504,115 @@ func TestApiHandler_UpdateJobStatus(t *testing.T) {
 	t.Run("bad uuid", func(t *testing.T) {
 		h := newHandler(&mockRepo{})
 
-		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/bad/status", bytes.NewReader([]byte(`{"status":"running"}`)))
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/bad/activate", nil)
 		req = withURLParam(req, "id", "bad-uuid")
 		w := httptest.NewRecorder()
 
-		h.UpdateJobStatus(w, req)
+		h.ActivateJob(w, req)
 
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if w.Code != stdhttp.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", w.Code)
 		}
 	})
 
-	t.Run("bad json", func(t *testing.T) {
-		h := newHandler(&mockRepo{})
-
-		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/"+jobID.String()+"/status", bytes.NewReader([]byte(`{bad}`)))
-		req = withURLParam(req, "id", jobID.String())
-		w := httptest.NewRecorder()
-
-		h.UpdateJobStatus(w, req)
-
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
+	t.Run("not found error", func(t *testing.T) {
 		repo := &mockRepo{
-			updateScheduleStatusFn: func(ctx context.Context, id uuid.UUID, status string) error {
-				return errors.New("update failed")
+			activateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				return apperrors.ErrNotFound
 			},
 		}
 
 		h := newHandler(repo)
 
-		body, _ := json.Marshal(UpdateStatusRequest{Status: "wrong"})
-		req := httptest.NewRequest(stdhttp.MethodPatch, "/jobs/"+jobID.String()+"/status", bytes.NewReader(body))
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/"+jobID.String()+"/activate", nil)
 		req = withURLParam(req, "id", jobID.String())
 		w := httptest.NewRecorder()
 
-		h.UpdateJobStatus(w, req)
+		h.ActivateJob(w, req)
 
-		if w.Code != stdhttp.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if w.Code != stdhttp.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("conflict error", func(t *testing.T) {
+		repo := &mockRepo{
+			activateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				return apperrors.ErrStatusConflict
+			},
+		}
+
+		h := newHandler(repo)
+
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/"+jobID.String()+"/activate", nil)
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.ActivateJob(w, req)
+
+		if w.Code != stdhttp.StatusConflict {
+			t.Fatalf("expected 409, got %d", w.Code)
+		}
+	})
+}
+
+func TestApiHandler_DeactivateJob(t *testing.T) {
+	jobID := uuid.New()
+
+	t.Run("success", func(t *testing.T) {
+		repo := &mockRepo{
+			deactivateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				if id != jobID {
+					t.Fatalf("expected %s, got %s", jobID, id)
+				}
+				return nil
+			},
+		}
+
+		h := newHandler(repo)
+
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/"+jobID.String()+"/deactivate", nil)
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.DeactivateJob(w, req)
+
+		if w.Code != stdhttp.StatusOK {
+			t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("bad uuid", func(t *testing.T) {
+		h := newHandler(&mockRepo{})
+
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/bad/deactivate", nil)
+		req = withURLParam(req, "id", "bad-uuid")
+		w := httptest.NewRecorder()
+
+		h.DeactivateJob(w, req)
+
+		if w.Code != stdhttp.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", w.Code)
+		}
+	})
+
+	t.Run("conflict error", func(t *testing.T) {
+		repo := &mockRepo{
+			deactivateJobFn: func(ctx context.Context, id uuid.UUID) error {
+				return apperrors.ErrStatusConflict
+			},
+		}
+
+		h := newHandler(repo)
+
+		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs/"+jobID.String()+"/deactivate", nil)
+		req = withURLParam(req, "id", jobID.String())
+		w := httptest.NewRecorder()
+
+		h.DeactivateJob(w, req)
+
+		if w.Code != stdhttp.StatusConflict {
+			t.Fatalf("expected 409, got %d", w.Code)
 		}
 	})
 }

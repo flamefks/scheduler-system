@@ -28,14 +28,14 @@ func (service *ApiService) CreateJob(ctx context.Context, job *data.Job) (uuid.U
 	jobId, err := service.repo.CreateJob(ctx, job)
 	if err != nil {
 		service.Logger.Error(
-			"failed_create_job",
+			"create_job",
 			slog.Any("job_data", job),
 			slog.Any("error", err),
 		)
-		return uuid.Nil, fmt.Errorf("Error on creating job: %w", err)
+		return uuid.Nil, err
 	}
 	service.Logger.Info(
-		"success_create_job",
+		"create_job",
 		slog.Any("job_name", job.Name),
 		slog.Any("job", &job),
 	)
@@ -50,10 +50,10 @@ func (service *ApiService) DeleteJob(ctx context.Context, jobId uuid.UUID) error
 			slog.Any("job_id", jobId),
 			slog.Any("error", err),
 		)
-		return fmt.Errorf("Error on removing job: %w", err)
+		return err
 	}
 	service.Logger.Info(
-		"success_delete_job",
+		"delete_job",
 		slog.Any("job_id", jobId),
 	)
 	return nil
@@ -63,14 +63,14 @@ func (service *ApiService) GetJobByID(ctx context.Context, jobId uuid.UUID) (*da
 	j, err := service.repo.GetJobByID(ctx, jobId)
 	if err != nil {
 		service.Logger.Error(
-			"failed_get_job",
+			"get_job",
 			slog.Any("job_id", jobId),
 			slog.Any("error", err),
 		)
-		return nil, fmt.Errorf("error getting job by id %s", jobId)
+		return nil, fmt.Errorf("error_get_job_by_id %s: %w", jobId, err)
 	}
 	service.Logger.Info(
-		"success_get_job",
+		"get_job",
 		slog.Any("job_id", jobId),
 		slog.Any("job", &j),
 	)
@@ -81,34 +81,47 @@ func (service *ApiService) PatchJob(ctx context.Context, patch *domain.PatchJobM
 	err := service.repo.PatchJob(ctx, patch, jobId)
 	if err != nil {
 		service.Logger.Error(
-			"failed_patch_job",
+			"patch_job",
 			slog.Any("job_id", jobId),
 			slog.Any("error", err),
 		)
-		return fmt.Errorf("error patching job by id %s", jobId)
+		return fmt.Errorf("error_patch_job_by_id %s: %w", jobId, err)
 	}
 	service.Logger.Info(
-		"success_patch_job",
+		"patch_job",
 		slog.Any("job_id", jobId),
 	)
 	return nil
 }
 
-func (service *ApiService) UpdateJobStatus(ctx context.Context, jobId uuid.UUID, status string) error {
-	if err := service.repo.UpdateScheduleStatus(ctx, jobId, status); err != nil {
+func (service *ApiService) ActivateJob(ctx context.Context, jobId uuid.UUID) error {
+	if err := service.repo.ActivateJob(ctx, jobId); err != nil {
 		service.Logger.Error(
-			"failed_update_job_status",
+			"activate_job",
 			slog.Any("job_id", jobId),
-			slog.String("new_status", status),
 			slog.Any("error", err),
 		)
-		return err
+		return fmt.Errorf("error_activate_job_by_id %s: %w", jobId, err)
 	}
 	service.Logger.Info(
-		"success_update_job_status",
+		"activate_job",
 		slog.Any("job_id", jobId),
-		slog.String("status", status),
 	)
 	return nil
+}
 
+func (service *ApiService) DeactivateJob(ctx context.Context, jobId uuid.UUID) error {
+	if err := service.repo.DeactivateJob(ctx, jobId); err != nil {
+		service.Logger.Error(
+			"deactivate_job",
+			slog.Any("job_id", jobId),
+			slog.Any("error", err),
+		)
+		return fmt.Errorf("error_deactivate_job_by_id %s: %w", jobId, err)
+	}
+	service.Logger.Info(
+		"deactivate_job",
+		slog.Any("job_id", jobId),
+	)
+	return nil
 }

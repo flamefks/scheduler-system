@@ -12,6 +12,21 @@ import (
 	"github.com/google/uuid"
 )
 
+const activateJob = `-- name: ActivateJob :one
+UPDATE job_schedules
+SET status = 'idle', updated_at = NOW()
+WHERE job_id = $1
+    AND status != 'running'
+RETURNING job_id
+`
+
+func (q *Queries) ActivateJob(ctx context.Context, jobID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, activateJob, jobID)
+	var job_id uuid.UUID
+	err := row.Scan(&job_id)
+	return job_id, err
+}
+
 const createJob = `-- name: CreateJob :one
 
 INSERT INTO jobs (
@@ -112,6 +127,21 @@ func (q *Queries) CreateJobSchedule(ctx context.Context, arg CreateJobSchedulePa
 	return err
 }
 
+const deactivateJob = `-- name: DeactivateJob :one
+UPDATE job_schedules
+SET status = 'disabled', updated_at = NOW()
+WHERE job_id = $1
+    AND status != 'running'
+RETURNING job_id
+`
+
+func (q *Queries) DeactivateJob(ctx context.Context, jobID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, deactivateJob, jobID)
+	var job_id uuid.UUID
+	err := row.Scan(&job_id)
+	return job_id, err
+}
+
 const deleteJob = `-- name: DeleteJob :exec
 DELETE FROM jobs
 WHERE id = $1
@@ -194,6 +224,7 @@ SELECT
     kind,
     payload,
     headers,
+    json_schema,
     target_url,
     method
 FROM job_io_configs
@@ -201,12 +232,13 @@ WHERE job_id = $1
 `
 
 type ListJobIOConfigsRow struct {
-	JobID     uuid.UUID
-	Kind      JobIoKind
-	Payload   []byte
-	Headers   []byte
-	TargetUrl string
-	Method    string
+	JobID      uuid.UUID
+	Kind       JobIoKind
+	Payload    []byte
+	Headers    []byte
+	JsonSchema []byte
+	TargetUrl  string
+	Method     string
 }
 
 func (q *Queries) ListJobIOConfigs(ctx context.Context, jobID uuid.UUID) ([]ListJobIOConfigsRow, error) {
@@ -223,6 +255,7 @@ func (q *Queries) ListJobIOConfigs(ctx context.Context, jobID uuid.UUID) ([]List
 			&i.Kind,
 			&i.Payload,
 			&i.Headers,
+			&i.JsonSchema,
 			&i.TargetUrl,
 			&i.Method,
 		); err != nil {
@@ -251,6 +284,7 @@ SET
     END,
     json_schema = CASE 
         WHEN $7::bool THEN $8
+        ELSE json_schema
     END
 WHERE job_id = $9
   AND kind = $10::job_io_kind
@@ -351,22 +385,4 @@ func (q *Queries) UpdateJobName(ctx context.Context, arg UpdateJobNameParams) (u
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
-}
-
-const updateJobScheduleStatus = `-- name: UpdateJobScheduleStatus :exec
-UPDATE job_schedules
-SET status = $1, updated_at = NOW()
-WHERE job_id = $2
-    AND status != 'running'
-    AND $1::schedule_status IN ('idle', 'disabled')
-`
-
-type UpdateJobScheduleStatusParams struct {
-	Status ScheduleStatus
-	JobID  uuid.UUID
-}
-
-func (q *Queries) UpdateJobScheduleStatus(ctx context.Context, arg UpdateJobScheduleStatusParams) error {
-	_, err := q.db.Exec(ctx, updateJobScheduleStatus, arg.Status, arg.JobID)
-	return err
 }

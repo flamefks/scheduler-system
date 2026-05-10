@@ -167,6 +167,38 @@ func TestDeliverService_Handle(t *testing.T) {
 		}
 	})
 
+	t.Run("nil config headers are treated as empty", func(t *testing.T) {
+		repo := &mockDeliverRepo{
+			getConfigFn: func(ctx context.Context, kind string, gotJobID uuid.UUID) (*data.IOConfig, error) {
+				return &data.IOConfig{
+					TargetUrl: "https://example.test/deliver",
+					Method:    http.MethodPost,
+					Headers:   nil,
+				}, nil
+			},
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+				return nil
+			},
+		}
+		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc.httpClient = &mockDeliverHTTPClient{
+			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
+				if len(req.Headers) != 0 {
+					t.Fatalf("expected empty headers, got %#v", req.Headers)
+				}
+				return &data.ExternalResponse{StatusCode: http.StatusOK}, nil
+			},
+		}
+
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if statusCode != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, statusCode)
+		}
+	})
+
 	t.Run("http error returns response status", func(t *testing.T) {
 		repo := &mockDeliverRepo{
 			getConfigFn: func(ctx context.Context, kind string, gotJobID uuid.UUID) (*data.IOConfig, error) {

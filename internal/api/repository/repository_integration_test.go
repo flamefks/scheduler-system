@@ -158,7 +158,12 @@ func seedJob(t *testing.T, repo *Repository, name string) uuid.UUID {
 func strPtr(s string) *string        { return &s }
 func i32Ptr(v int32) *int32          { return &v }
 func timePtr(v time.Time) *time.Time { return &v }
-func bytesPtr(v []byte) *[]byte      { return &v }
+func jsonField(v []byte) domain.PatchJSONField {
+	return domain.PatchJSONField{
+		Set:   true,
+		Value: v,
+	}
+}
 
 func TestRepository_CreateJob_GetJobByID_DeleteJob_Integration(t *testing.T) {
 	tdb := setupTestRepo(t)
@@ -240,15 +245,15 @@ func TestRepository_CreateJob_GetJobByID_DeleteJob_Integration(t *testing.T) {
 	}
 }
 
-func TestRepository_UpdateScheduleStatus_Integration(t *testing.T) {
+func TestRepository_ActivateDeactivateJob_Integration(t *testing.T) {
 	tdb := setupTestRepo(t)
 	repo := tdb.Repo
 	ctx := context.Background()
 
-	id := seedJob(t, repo, "job-status-update")
+	id := seedJob(t, repo, "job-activate-deactivate")
 
-	if err := repo.UpdateScheduleStatus(ctx, id, "running"); err != nil {
-		t.Fatalf("UpdateScheduleStatus error: %v", err)
+	if err := repo.DeactivateJob(ctx, id); err != nil {
+		t.Fatalf("DeactivateJob error: %v", err)
 	}
 
 	got, err := repo.GetJobByID(ctx, id)
@@ -256,21 +261,32 @@ func TestRepository_UpdateScheduleStatus_Integration(t *testing.T) {
 		t.Fatalf("GetJobByID error: %v", err)
 	}
 
-	if got.Schedule.Status != "running" {
-		t.Fatalf("expected status running, got %s", got.Schedule.Status)
+	if got.Schedule.Status != "disabled" {
+		t.Fatalf("expected status disabled, got %s", got.Schedule.Status)
+	}
+
+	if err := repo.ActivateJob(ctx, id); err != nil {
+		t.Fatalf("ActivateJob error: %v", err)
+	}
+
+	got, err = repo.GetJobByID(ctx, id)
+	if err != nil {
+		t.Fatalf("GetJobByID error: %v", err)
+	}
+
+	if got.Schedule.Status != "idle" {
+		t.Fatalf("expected status idle, got %s", got.Schedule.Status)
 	}
 }
 
-func TestRepository_UpdateScheduleStatus_InvalidStatus_Integration(t *testing.T) {
+func TestRepository_ActivateJob_NotFound_Integration(t *testing.T) {
 	tdb := setupTestRepo(t)
 	repo := tdb.Repo
 	ctx := context.Background()
 
-	id := seedJob(t, repo, "job-invalid-status")
-
-	err := repo.UpdateScheduleStatus(ctx, id, "lolwat")
+	err := repo.ActivateJob(ctx, uuid.New())
 	if err == nil {
-		t.Fatal("expected error for invalid status")
+		t.Fatal("expected error for missing job")
 	}
 }
 
@@ -298,8 +314,8 @@ func TestRepository_PatchJob_NameScheduleFetcher_Integration(t *testing.T) {
 			Status:            strPtr(newStatus),
 		},
 		FetcherConfig: &domain.PatchIOConfig{
-			Payload:   bytesPtr(newFetcherPayload),
-			Headers:   bytesPtr(newFetcherHeader),
+			Payload:   jsonField(newFetcherPayload),
+			Headers:   jsonField(newFetcherHeader),
 			TargetUrl: strPtr(newFetcherURL),
 			Method:    strPtr(newFetcherMethod),
 		},
@@ -358,8 +374,8 @@ func TestRepository_PatchJob_DeliverConfig_Integration(t *testing.T) {
 
 	patch := &domain.PatchJobModel{
 		DeliverConfig: &domain.PatchIOConfig{
-			Payload:   bytesPtr(newDeliverPayload),
-			Headers:   bytesPtr(newDeliverHeader),
+			Payload:   jsonField(newDeliverPayload),
+			Headers:   jsonField(newDeliverHeader),
 			TargetUrl: strPtr(newDeliverURL),
 			Method:    strPtr(newDeliverMethod),
 		},
