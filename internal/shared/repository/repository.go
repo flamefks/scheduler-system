@@ -66,7 +66,8 @@ func getJobKindEnum(rowKind string) (db.JobIoKind, error) {
 func getJobStatusEnum(jStatus string) (db.ScheduleStatus, error) {
 	jobStatusEnum := db.ScheduleStatus(jStatus)
 	switch jobStatusEnum {
-	case db.ScheduleStatusIdle, db.ScheduleStatusRunning, db.ScheduleStatusError, db.ScheduleStatusDisabled:
+	case db.ScheduleStatusIdle, db.ScheduleStatusScheduled, db.ScheduleStatusFetching, db.ScheduleStatusDelivering,
+		db.ScheduleStatusError, db.ScheduleStatusDisabled:
 		return jobStatusEnum, nil
 	default:
 		return "", fmt.Errorf("invalid JobStatus: %s", jStatus)

@@ -14,7 +14,7 @@ import (
 const claimNextJob = `-- name: ClaimNextJob :one
 UPDATE job_schedules
 SET
-    status = 'running',
+    status = 'scheduled',
     scheduled_runs = scheduled_runs + 1,
     last_run_at = NOW(),
     next_run_at = CASE
@@ -52,7 +52,7 @@ UPDATE job_schedules
 SET
     status = 'idle',
     updated_at = NOW()
-WHERE status = 'running'
+WHERE status IN ('scheduled', 'fetching', 'delivering')
   AND NOW() - last_run_at > ($1::bigint * interval '1 second')
 `
 

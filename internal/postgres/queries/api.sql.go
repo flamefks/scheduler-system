@@ -16,7 +16,7 @@ const activateJob = `-- name: ActivateJob :one
 UPDATE job_schedules
 SET status = 'idle', updated_at = NOW()
 WHERE job_id = $1
-    AND status != 'running'
+    AND status NOT IN ('scheduled', 'fetching', 'delivering')
 RETURNING job_id
 `
 
@@ -131,7 +131,7 @@ const deactivateJob = `-- name: DeactivateJob :one
 UPDATE job_schedules
 SET status = 'disabled', updated_at = NOW()
 WHERE job_id = $1
-    AND status != 'running'
+    AND status NOT IN ('scheduled', 'fetching', 'delivering')
 RETURNING job_id
 `
 
@@ -333,7 +333,7 @@ SET
     END,
     status = CASE 
         WHEN $5::schedule_status IS NOT NULL
-            AND status != 'running'
+            AND status NOT IN ('scheduled', 'fetching', 'delivering')
             AND $5::schedule_status != 'error'
         THEN $5::schedule_status
         ELSE status 

@@ -73,7 +73,7 @@ SET
     END,
     status = CASE 
         WHEN sqlc.narg(status)::schedule_status IS NOT NULL
-            AND status != 'running'
+            AND status NOT IN ('scheduled', 'fetching', 'delivering')
             AND sqlc.narg(status)::schedule_status != 'error'
         THEN sqlc.narg(status)::schedule_status
         ELSE status 
@@ -86,14 +86,14 @@ RETURNING job_id;
 UPDATE job_schedules
 SET status = 'idle', updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)
-    AND status != 'running'
+    AND status NOT IN ('scheduled', 'fetching', 'delivering')
 RETURNING job_id;
 
 -- name: DeactivateJob :one
 UPDATE job_schedules
 SET status = 'disabled', updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)
-    AND status != 'running'
+    AND status NOT IN ('scheduled', 'fetching', 'delivering')
 RETURNING job_id;
 
 -- =========================

@@ -307,7 +307,8 @@ func (repo *Repository) DeactivateJob(ctx context.Context, id uuid.UUID) error {
 func getJobStatusEnum(rowStatus string) (db.ScheduleStatus, error) {
 	scheduleStatus := db.ScheduleStatus(rowStatus)
 	switch scheduleStatus {
-	case db.ScheduleStatusIdle, db.ScheduleStatusRunning, db.ScheduleStatusError, db.ScheduleStatusDisabled:
+	case db.ScheduleStatusIdle, db.ScheduleStatusScheduled, db.ScheduleStatusFetching, db.ScheduleStatusDelivering,
+		db.ScheduleStatusError, db.ScheduleStatusDisabled:
 		return scheduleStatus, nil
 	default:
 		return "", fmt.Errorf("update_schedule_status to %s: %w", rowStatus, apperrors.ErrInvalidStatus)
