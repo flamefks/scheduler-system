@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
+	coreConf "github.com/flamefks/scheduler-system/internal/natsinit/config"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
@@ -12,11 +12,14 @@ import (
 )
 
 func main() {
-	url := os.Getenv("NATS_URL")
-
 	ctx := context.Background()
 
-	nc, err := nats.Connect(url)
+	coreCfg, err := coreConf.LoadAppConfig("config/core.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	nc, err := nats.Connect(coreCfg.Nats.Url)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -27,7 +30,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := natsSetup.EnsureStreams(ctx, js); err != nil {
+	if err := natsSetup.EnsureStreams(ctx, js, coreCfg.JetStream); err != nil {
 		log.Fatal(err)
 	}
 

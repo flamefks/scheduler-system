@@ -2,10 +2,10 @@ SQLC_VERSION := 1.27.0
 MIGRATIONS_DIR := sql/migrations
 
 test:
-	go test ./internal/... --no-cache
+	go test ./internal/... -count=1
 
 test-integration:
-	go test ./internal/... -tags=integration  --no-cache
+	go test ./internal/... -tags=integration  -count=1
 
 bench:
 	go test ./internal/... -tags=integration -bench=. -benchmem -run=^$

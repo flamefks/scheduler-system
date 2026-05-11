@@ -24,6 +24,9 @@ func (m *mockFetcherRepo) GetConfig(ctx context.Context, kind string, jobId uuid
 }
 
 func (m *mockFetcherRepo) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID) error {
+	if m.setJobStatusFn == nil {
+		return nil
+	}
 	return m.setJobStatusFn(ctx, status, jobId)
 }
 
@@ -105,12 +108,8 @@ func TestFetcherService_Handle(t *testing.T) {
 					t.Fatalf("expected job header %s, got %s", jobID, headers["job-id"])
 				}
 
-				var response data.ExternalResponse
-				if err := json.Unmarshal(payload, &response); err != nil {
-					t.Fatalf("unexpected payload: %v", err)
-				}
-				if response.StatusCode != http.StatusAccepted {
-					t.Fatalf("expected status %d, got %d", http.StatusAccepted, response.StatusCode)
+				if string(payload) != `{"accepted":true}` {
+					t.Fatalf("unexpected payload: %s", string(payload))
 				}
 				return nil
 			},
@@ -131,11 +130,15 @@ func TestFetcherService_Handle(t *testing.T) {
 				if req.Headers["X-Token"] != "secret" {
 					t.Fatalf("unexpected headers: %#v", req.Headers)
 				}
-				return &data.ExternalResponse{StatusCode: http.StatusAccepted}, nil
+				return &data.ExternalResponse{
+					StatusCode: http.StatusAccepted,
+					Body:       json.RawMessage(`{"accepted":true}`),
+				}, nil
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -147,7 +150,8 @@ func TestFetcherService_Handle(t *testing.T) {
 	t.Run("invalid job id header", func(t *testing.T) {
 		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{})
 
-		err, statusCode := svc.Handle(context.Background(), nil, nats.Header{})
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, nats.Header{}, &needSetDbStatus)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -165,7 +169,8 @@ func TestFetcherService_Handle(t *testing.T) {
 		}
 		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, repoErr) {
 			t.Fatalf("expected repo error, got %v", err)
 		}
@@ -182,7 +187,8 @@ func TestFetcherService_Handle(t *testing.T) {
 		}
 		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -216,7 +222,8 @@ func TestFetcherService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -243,7 +250,8 @@ func TestFetcherService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, httpErr) {
 			t.Fatalf("expected http error, got %v", err)
 		}
@@ -275,7 +283,8 @@ func TestFetcherService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, publishErr) {
 			t.Fatalf("expected publish error, got %v", err)
 		}

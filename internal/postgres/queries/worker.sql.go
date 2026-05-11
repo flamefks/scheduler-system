@@ -16,7 +16,8 @@ SELECT
     payload, 
     headers,
     target_url,
-    method
+    method,
+    json_schema
 FROM job_io_configs  
 WHERE job_id= $1 AND kind = $2
 `
@@ -27,10 +28,11 @@ type GetConfigParams struct {
 }
 
 type GetConfigRow struct {
-	Payload   []byte
-	Headers   []byte
-	TargetUrl string
-	Method    string
+	Payload    []byte
+	Headers    []byte
+	TargetUrl  string
+	Method     string
+	JsonSchema []byte
 }
 
 func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfigRow, error) {
@@ -41,13 +43,21 @@ func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfig
 		&i.Headers,
 		&i.TargetUrl,
 		&i.Method,
+		&i.JsonSchema,
 	)
 	return i, err
 }
 
 const setJobStatus = `-- name: SetJobStatus :exec
 UPDATE job_schedules
-SET status = $1
+SET
+    status = $1,
+    done_runs = CASE
+        WHEN $1::schedule_status IN ('idle', 'error')
+            THEN done_runs + 1
+        ELSE done_runs
+    END,
+    updated_at = NOW()
 WHERE job_id = $2
 `
 

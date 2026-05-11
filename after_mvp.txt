@@ -1,12 +1,16 @@
-    response_schema JSONB NULL - добавление валидации ответа внешнего апи +DOne
-    retry_policy JSONB NOT NULL - отдельная таблица строго structed 
+    response_schema JSONB NULL - добавление валидации ответа внешнего апи (+)
+    retry_policy JSONB NOT NULL - отдельная таблица строго structed (-)
 
 // Planning
-1) Fix status code answers on api + Done
-2) Add metrics and fix logging 
-3) Make more stability and observ microserv (add statuses: fetch, deliver ...) - 
-    В рамках фикса, помимо статусов, изменить scheduled_runs --> target_runs / done_runs
-4) Add grpc
-5) Отсутствует идемпотентность операций:
+1) Fix status code answers on api (+)
+2) Add metrics and fix logging (-)
+3) Make more stability and observ microserv (add statuses: fetch, deliver ...) (+)
+    a) В рамках фикса, помимо статусов, изменить scheduled_runs --> target_runs / done_runs (+)
+    b) убрать воз-ть апдейта статуса через patch_job (+)
+4) Add grpc (-)
+5) Отсутствует идемпотентность операций: (+) - закрыто пунктом 3
     можем обновит постгрес, но сфейлиться на nats в шедулере
-    
+6) Решить все вопросы с NATS (ack/nak/term) + multithread для фетчер/деливера (-)
+    Также продумать тут типы errors под nak/term 
+
+7) ПОПРАВИТЬ DTO ВАЛИДАЦИИ ЗА НЕЙРОНКОЙ)))

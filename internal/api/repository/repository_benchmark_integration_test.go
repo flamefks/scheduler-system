@@ -258,10 +258,6 @@ func BenchmarkRepository_PatchJob_NameSchedule_Integration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		name := fmt.Sprintf("patched-%d", i)
 		nextRunAt := time.Now().UTC().Truncate(time.Second).Add(time.Duration(i+1) * time.Minute)
-		status := "running"
-		if i%2 == 0 {
-			status = "idle"
-		}
 
 		patch := &domain.PatchJobModel{
 			Name: strPtrBench(name),
@@ -269,7 +265,6 @@ func BenchmarkRepository_PatchJob_NameSchedule_Integration(b *testing.B) {
 				RepeatIntervalSec: i32PtrBench(int32(60 + i%100)),
 				TargetRuns:        i32PtrBench(int32(10 + i%50)),
 				NextRunAt:         timePtrBench(nextRunAt),
-				Status:            strPtrBench(status),
 			},
 		}
 

@@ -36,12 +36,22 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := ValidateCreateJobRequest(&req); err != nil {
+		h.apiService.Logger.Warn(
+			"create_job",
+			slog.Any("state", "validate_request"),
+			slog.Any("error", err),
+		)
+		writeError(w, apperrors.ErrInvalidRequest)
+		return
+	}
+
 	jobDomain := &data.Job{
 		Name: req.Name,
 		Schedule: data.Schedule{
 			RepeatIntervalSec: req.Schedule.RepeatIntervalSec,
 			TargetRuns:        req.Schedule.TargetRuns,
-			ScheduledRuns:     0,
+			DoneRuns:          0,
 			NextRunAt:         req.Schedule.NextRunAt,
 			LastRunAt:         nil,
 		},
@@ -122,6 +132,16 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := ValidatePatchJobRequest(&req); err != nil {
+		h.apiService.Logger.Warn(
+			"patch_job",
+			slog.Any("state", "validate_request"),
+			slog.Any("error", err),
+		)
+		writeError(w, apperrors.ErrInvalidRequest)
+		return
+	}
+
 	patch := &domain.PatchJobModel{
 		Name: req.Name,
 	}
@@ -136,6 +156,8 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 
 	if req.FetcherConfig != nil {
 		patch.FetcherConfig = &domain.PatchIOConfig{
+			TargetUrl: req.FetcherConfig.TargetURL,
+			Method:    req.FetcherConfig.Method,
 			Payload: domain.PatchJSONField{
 				Set:   req.FetcherConfig.Payload.Set,
 				Value: req.FetcherConfig.Payload.Value,
@@ -153,6 +175,8 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 
 	if req.DeliverConfig != nil {
 		patch.DeliverConfig = &domain.PatchIOConfig{
+			TargetUrl: req.DeliverConfig.TargetURL,
+			Method:    req.DeliverConfig.Method,
 			Payload: domain.PatchJSONField{
 				Set:   req.DeliverConfig.Payload.Set,
 				Value: req.DeliverConfig.Payload.Value,
@@ -281,6 +305,11 @@ func writeError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadRequest, data.BasicResonse{
 			Status:  "error",
 			Message: "error decoding request body",
+		})
+	case errors.Is(err, apperrors.ErrInvalidRequest):
+		writeJSON(w, http.StatusBadRequest, data.BasicResonse{
+			Status:  "error",
+			Message: "invalid request body",
 		})
 	case errors.Is(err, apperrors.ErrInvalidUUID):
 		writeJSON(w, http.StatusUnprocessableEntity, data.BasicResonse{

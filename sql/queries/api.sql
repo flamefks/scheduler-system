@@ -28,10 +28,10 @@ SET
 WHERE id = $1
 RETURNING id;
 
--- name: DeleteJob :exec
+-- name: DeleteJob :one
 DELETE FROM jobs
-WHERE id = $1;
-
+WHERE id = $1
+RETURNING id;
 
 -- =========================
 -- SCHEDULE
@@ -53,7 +53,7 @@ SELECT
     job_id,
     status,
     repeat_interval_sec,
-    scheduled_runs,
+    done_runs,
     target_runs,
     last_run_at,
     next_run_at,
@@ -70,13 +70,6 @@ SET
     next_run_at = CASE
         WHEN sqlc.arg(set_next_run_at)::bool THEN sqlc.arg(next_run_at)
         ELSE next_run_at
-    END,
-    status = CASE 
-        WHEN sqlc.narg(status)::schedule_status IS NOT NULL
-            AND status NOT IN ('scheduled', 'fetching', 'delivering')
-            AND sqlc.narg(status)::schedule_status != 'error'
-        THEN sqlc.narg(status)::schedule_status
-        ELSE status 
     END,
     updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)

@@ -24,6 +24,9 @@ func (m *mockDeliverRepo) GetConfig(ctx context.Context, kind string, jobId uuid
 }
 
 func (m *mockDeliverRepo) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID) error {
+	if m.setJobStatusFn == nil {
+		return nil
+	}
 	return m.setJobStatusFn(ctx, status, jobId)
 }
 
@@ -82,8 +85,8 @@ func TestDeliverService_Handle(t *testing.T) {
 				}, nil
 			},
 			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
-				if status != "idle" {
-					t.Fatalf("expected idle status, got %s", status)
+				if status != "delivering" && status != "idle" {
+					t.Fatalf("expected delivering or idle status, got %s", status)
 				}
 				if gotJobID != jobID {
 					t.Fatalf("expected job id %s, got %s", jobID, gotJobID)
@@ -111,7 +114,8 @@ func TestDeliverService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -123,7 +127,8 @@ func TestDeliverService_Handle(t *testing.T) {
 	t.Run("invalid job id header", func(t *testing.T) {
 		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{})
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, nats.Header{})
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, nats.Header{}, &needSetDbStatus)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -141,7 +146,8 @@ func TestDeliverService_Handle(t *testing.T) {
 		}
 		svc := NewDeliverService(deliverTestLogger(), repo)
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, repoErr) {
 			t.Fatalf("expected repo error, got %v", err)
 		}
@@ -158,7 +164,8 @@ func TestDeliverService_Handle(t *testing.T) {
 		}
 		svc := NewDeliverService(deliverTestLogger(), repo)
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -190,7 +197,8 @@ func TestDeliverService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -217,7 +225,8 @@ func TestDeliverService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, httpErr) {
 			t.Fatalf("expected http error, got %v", err)
 		}
@@ -247,7 +256,8 @@ func TestDeliverService_Handle(t *testing.T) {
 			},
 		}
 
-		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID))
+		needSetDbStatus := true
+		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
 		if !errors.Is(err, statusErr) {
 			t.Fatalf("expected status error, got %v", err)
 		}

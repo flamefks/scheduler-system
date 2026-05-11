@@ -1,0 +1,20 @@
+nats:
+  url: "nats://nats:4222"
+
+jetstream:
+  stream:
+    storage: "file"
+    retention: "workqueue"
+
+  consumer:
+    ack_wait: 2m
+    max_deliver: 7
+    backoff:
+      - 5s
+      - 15s
+      - 30s
+      - 1m
+      - 2m
+      - 3m
+      - 5m
+    max_ack_pending: 128

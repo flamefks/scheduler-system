@@ -299,7 +299,6 @@ func TestRepository_PatchJob_NameScheduleFetcher_Integration(t *testing.T) {
 
 	newName := "job-after-patch"
 	newNextRunAt := time.Now().UTC().Truncate(time.Second).Add(5 * time.Hour)
-	newStatus := "disabled"
 	newFetcherPayload := []byte(`{"fetch":"patched"}`)
 	newFetcherHeader := []byte(`{"Authorization":"Bearer patched-fetch"}`)
 	newFetcherURL := "https://fetch.example/patched"
@@ -311,7 +310,6 @@ func TestRepository_PatchJob_NameScheduleFetcher_Integration(t *testing.T) {
 			TargetRuns:        i32Ptr(99),
 			RepeatIntervalSec: i32Ptr(777),
 			NextRunAt:         timePtr(newNextRunAt),
-			Status:            strPtr(newStatus),
 		},
 		FetcherConfig: &domain.PatchIOConfig{
 			Payload:   jsonField(newFetcherPayload),
@@ -338,9 +336,6 @@ func TestRepository_PatchJob_NameScheduleFetcher_Integration(t *testing.T) {
 	}
 	if got.Schedule.RepeatIntervalSec != 777 {
 		t.Fatalf("expected repeat_interval_sec 777, got %d", got.Schedule.RepeatIntervalSec)
-	}
-	if got.Schedule.Status != newStatus {
-		t.Fatalf("expected status %q, got %q", newStatus, got.Schedule.Status)
 	}
 	if !got.Schedule.NextRunAt.Equal(newNextRunAt) {
 		t.Fatalf("expected next_run_at %v, got %v", newNextRunAt, got.Schedule.NextRunAt)

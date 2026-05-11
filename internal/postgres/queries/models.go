@@ -127,5 +127,5 @@ type JobSchedule struct {
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
-	ScheduledRuns     int32
+	DoneRuns          int32
 }

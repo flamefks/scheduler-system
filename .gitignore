@@ -12,6 +12,7 @@
 *.test
 *.out
 coverage.out
+.gocache/
 
 # Vendor 
 vendor/
@@ -55,3 +56,4 @@ config.yml
 
 # Test cache
 *.coverprofile
+test-results/

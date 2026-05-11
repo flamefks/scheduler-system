@@ -8,4 +8,5 @@ var (
 	ErrStatusConflict = errors.New("status conflict")
 	ErrInvalidJSON    = errors.New("invalid json")
 	ErrInvalidUUID    = errors.New("invalid uuid")
+	ErrInvalidRequest = errors.New("invalid request")
 )

@@ -49,7 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	b, err = yaml.Marshal(logCfg)
+	b, err = yaml.Marshal(coreCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,34 +86,36 @@ func main() {
 	repository := repo.NewSchedulerRepository(pool, queries)
 	schedulerService := service.NewSchedulerService(logger, repository, publisher)
 
-	// semaphore
-	sem := make(chan struct{}, 256)
-
 	// Bacground checkers
-	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout,
-		coreCfg.BackgroundTasks.HungJobsMonitor.PollInterval)
+	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.Tasks.HungJobsMonitor.ScheduleTimeoutSeconds,
+		coreCfg.Tasks.HungJobsMonitor.ProcTimeoutSeconds, coreCfg.Tasks.HungJobsMonitor.PollInterval)
 
-	go schedulerService.MonitorDisabledTasks(appCtx, coreCfg.BackgroundTasks.DisableJobsMonitor.PollInterval)
+	go schedulerService.MonitorDisabledTasks(appCtx, coreCfg.Tasks.DisableJobsMonitor.PollInterval)
 
 	// Loop
-	ticker := time.NewTicker(coreCfg.GetJobPollInterval)
+	ticker := time.NewTicker(coreCfg.Tasks.GetJobSettings.PollInterval)
 	defer ticker.Stop()
 
+	// semaphore
+	sem := make(chan struct{}, coreCfg.Tasks.GetJobSettings.MaxParallerNatsPushers)
 	for {
 		select {
 		case <-appCtx.Done():
 			return
 		case <-ticker.C:
-			jID := schedulerService.ClaimNextJob(appCtx)
-			if jID == uuid.Nil {
+			jobIds := schedulerService.ClaimNextJobs(appCtx, coreCfg.Tasks.GetJobSettings.JobsBatchSize)
+			if len(jobIds) == 0 {
 				continue
 			}
 
-			sem <- struct{}{}
-			go func(id uuid.UUID) {
-				defer func() { <-sem }()
-				schedulerService.PublishJobIdToChannel(appCtx, id)
-			}(jID)
+			for _, jId := range jobIds {
+				sem <- struct{}{}
+				job_id := jId
+				go func(id uuid.UUID) {
+					defer func() { <-sem }()
+					schedulerService.PublishJobIdToChannel(appCtx, id)
+				}(job_id)
+			}
 		}
 	}
 }

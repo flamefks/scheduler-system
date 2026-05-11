@@ -50,7 +50,13 @@ func loadCoreConfig(path string) (*CoreConfig, error) {
 		return nil, err
 	}
 
+	httpRetrySection, err := globalConf.ValidateHttpRetrySection(&cfg.HttpRetry)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg.Postgres = dbSection
+	cfg.HttpRetry = *httpRetrySection
 	cfg, err = ValidateCore(cfg)
 	if err != nil {
 		return nil, err

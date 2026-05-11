@@ -34,7 +34,7 @@ func NewFetcherService(logger *slog.Logger, publisher natsqueue.AbstractPublishe
 	}
 }
 
-func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsHeader nats.Header) (error, int) {
+func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsHeader nats.Header, needSetDbStatus *bool) (error, int) {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -48,6 +48,21 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 
 	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
 	defer cancel()
+
+	if *needSetDbStatus {
+		err = f.repo.SetJobStatus(ctx, "fetching", jobId)
+		if err != nil {
+			f.logger.Error(
+				"failed_set_job_status",
+				slog.Any("job_id", jobId),
+				slog.String("new_status", "fetching"),
+				slog.Any("err", err),
+			)
+			return err, 0
+		}
+	}
+
+	*needSetDbStatus = false
 
 	reqConfig, err := f.repo.GetConfig(ctx, data.FetcherKindName, jobId)
 	if err != nil {
@@ -103,7 +118,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		slog.Any("data", &response),
 	)
 
-	bytesMsg, err := json.Marshal(response)
+	bytesPayload, err := json.Marshal(response.Body)
 	if err != nil {
 		f.logger.Error(
 			"failed_marshal_http_response",
@@ -113,12 +128,12 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		return err, 0
 	}
 	if len(reqConfig.JsonSchema) > 0 {
-		if err = utils.ValidateRawMessageWithSchema(reqConfig.JsonSchema, bytesMsg); err != nil {
+		if err = utils.ValidateRawMessageWithSchema(reqConfig.JsonSchema, bytesPayload); err != nil {
 			return fmt.Errorf("%v: %v", utils.ValidateSchemaError, err), 0
 		}
 	}
 
-	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, bytesMsg, map[string]string{
+	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, bytesPayload, map[string]string{
 		"job-id": strJobId,
 	})
 
@@ -163,6 +178,8 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 
 func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header) error {
 	config := coreConf.GetCoreConfig().HttpRetry
+	needNotifyDb := true
+	delay := config.BaseDelay
 	for attempt := 0; attempt < config.MaxAttempts; attempt++ {
 		select {
 		case <-parentCtx.Done():
@@ -170,8 +187,9 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 		default:
 		}
 
-		err, statusCode := f.Handle(parentCtx, binData, natsHeader)
-		if err == nil && !utils.InSlice(config.RetryOnStatus, statusCode) {
+		err, statusCode := f.Handle(parentCtx, binData, natsHeader, &needNotifyDb)
+		isHttpError := utils.InSlice(config.RetryOnStatus, statusCode)
+		if err == nil && !isHttpError {
 			return nil
 		}
 
@@ -182,11 +200,17 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 			slog.Any("error", err),
 		)
 
-		if !config.RetryOnError || attempt == config.MaxAttempts-1 {
-			return err
+		if (!config.RetryOnError && !isHttpError) || attempt == config.MaxAttempts-1 {
+			if err == nil && isHttpError {
+				return fmt.Errorf("Http status code error: %d", statusCode)
+			} else {
+				return err
+			}
 		}
 
-		delay := utils.BackoffDuration(attempt, config.BaseDelay, config.MaxDelay)
+		if config.Backoff == "exponential" {
+			delay = utils.BackoffDuration(attempt, config.BaseDelay, config.MaxDelay)
+		}
 		f.logger.Debug("waiting before retry", slog.Duration("delay", delay))
 
 		select {

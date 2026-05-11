@@ -157,7 +157,7 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job
 			Status:            string(schedule.Status),
 			RepeatIntervalSec: schedule.RepeatIntervalSec,
 			TargetRuns:        schedule.TargetRuns,
-			ScheduledRuns:     schedule.ScheduledRuns,
+			DoneRuns:          schedule.DoneRuns,
 			NextRunAt:         schedule.NextRunAt,
 			LastRunAt:         schedule.LastRunAt,
 		},
@@ -203,26 +203,12 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 			nextRunAt = *patch.Schedule.NextRunAt
 		}
 
-		var setScheduleStatus bool = false
-		var statusAsEnum db.ScheduleStatus
-		if patch.Schedule.Status != nil {
-			setScheduleStatus = true
-			statusAsEnum, err = getJobStatusEnum(*patch.Schedule.Status)
-			if err != nil {
-				return fmt.Errorf("patch_schedule_table: %w", err)
-			}
-		}
-
 		if _, err := qtx.PatchJobSchedule(ctx, db.PatchJobScheduleParams{
 			NextRunAt:         nextRunAt,
 			SetNextRunAt:      setRunAt,
 			RepeatIntervalSec: patch.Schedule.RepeatIntervalSec,
 			TargetRuns:        patch.Schedule.TargetRuns,
-			Status: db.NullScheduleStatus{
-				ScheduleStatus: statusAsEnum,
-				Valid:          setScheduleStatus,
-			},
-			JobID: id,
+			JobID:             id,
 		}); err != nil {
 			return fmt.Errorf("patch_schedule_table: %w", err)
 		}
@@ -276,7 +262,12 @@ func (repo *Repository) PatchJob(ctx context.Context, patch *domain.PatchJobMode
 // =========================
 
 func (repo *Repository) DeleteJob(ctx context.Context, id uuid.UUID) error {
-	return repo.q.DeleteJob(ctx, id)
+	_, err := repo.q.DeleteJob(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("job by id <%v> not found: %w", id, apperrors.ErrNotFound)
+	} else {
+		return err
+	}
 }
 
 // =========================
@@ -304,17 +295,6 @@ func (repo *Repository) DeactivateJob(ctx context.Context, id uuid.UUID) error {
 // =========================
 // HELPERS
 // =========================
-func getJobStatusEnum(rowStatus string) (db.ScheduleStatus, error) {
-	scheduleStatus := db.ScheduleStatus(rowStatus)
-	switch scheduleStatus {
-	case db.ScheduleStatusIdle, db.ScheduleStatusScheduled, db.ScheduleStatusFetching, db.ScheduleStatusDelivering,
-		db.ScheduleStatusError, db.ScheduleStatusDisabled:
-		return scheduleStatus, nil
-	default:
-		return "", fmt.Errorf("update_schedule_status to %s: %w", rowStatus, apperrors.ErrInvalidStatus)
-	}
-}
-
 func (repo *Repository) mapScheduleCommandError(ctx context.Context, id uuid.UUID, operation string, err error) error {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("%s: %w", operation, err)

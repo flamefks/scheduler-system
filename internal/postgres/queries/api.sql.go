@@ -142,14 +142,16 @@ func (q *Queries) DeactivateJob(ctx context.Context, jobID uuid.UUID) (uuid.UUID
 	return job_id, err
 }
 
-const deleteJob = `-- name: DeleteJob :exec
+const deleteJob = `-- name: DeleteJob :one
 DELETE FROM jobs
 WHERE id = $1
+RETURNING id
 `
 
-func (q *Queries) DeleteJob(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteJob, id)
-	return err
+func (q *Queries) DeleteJob(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteJob, id)
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getJob = `-- name: GetJob :one
@@ -179,7 +181,7 @@ SELECT
     job_id,
     status,
     repeat_interval_sec,
-    scheduled_runs,
+    done_runs,
     target_runs,
     last_run_at,
     next_run_at,
@@ -193,7 +195,7 @@ type GetJobScheduleRow struct {
 	JobID             uuid.UUID
 	Status            ScheduleStatus
 	RepeatIntervalSec int32
-	ScheduledRuns     int32
+	DoneRuns          int32
 	TargetRuns        int32
 	LastRunAt         *time.Time
 	NextRunAt         time.Time
@@ -208,7 +210,7 @@ func (q *Queries) GetJobSchedule(ctx context.Context, jobID uuid.UUID) (GetJobSc
 		&i.JobID,
 		&i.Status,
 		&i.RepeatIntervalSec,
-		&i.ScheduledRuns,
+		&i.DoneRuns,
 		&i.TargetRuns,
 		&i.LastRunAt,
 		&i.NextRunAt,
@@ -331,15 +333,8 @@ SET
         WHEN $3::bool THEN $4
         ELSE next_run_at
     END,
-    status = CASE 
-        WHEN $5::schedule_status IS NOT NULL
-            AND status NOT IN ('scheduled', 'fetching', 'delivering')
-            AND $5::schedule_status != 'error'
-        THEN $5::schedule_status
-        ELSE status 
-    END,
     updated_at = NOW()
-WHERE job_id = $6
+WHERE job_id = $5
 RETURNING job_id
 `
 
@@ -348,7 +343,6 @@ type PatchJobScheduleParams struct {
 	TargetRuns        *int32
 	SetNextRunAt      bool
 	NextRunAt         time.Time
-	Status            NullScheduleStatus
 	JobID             uuid.UUID
 }
 
@@ -358,7 +352,6 @@ func (q *Queries) PatchJobSchedule(ctx context.Context, arg PatchJobSchedulePara
 		arg.TargetRuns,
 		arg.SetNextRunAt,
 		arg.NextRunAt,
-		arg.Status,
 		arg.JobID,
 	)
 	var job_id uuid.UUID
