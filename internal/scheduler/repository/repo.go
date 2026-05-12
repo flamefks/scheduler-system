@@ -7,7 +7,7 @@ import (
 )
 
 type PostgresRepo interface {
-	ClaimNextJob(ctx context.Context) (uuid.UUID, error)
-	ResetHungMessage(ctx context.Context, JobDeathTimeout int) error
+	ClaimNextJobs(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error)
+	ResetHungMessage(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) error
 	SwitchToDisabledIfNeed(ctx context.Context) error
 }

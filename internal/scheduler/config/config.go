@@ -12,18 +12,25 @@ type CoreConfig struct {
 	Nats     struct {
 		Url string `yaml:"url" json:"url"`
 	} `yaml:"nats" json:"nats"`
-	BackgroundTasks    BackgroundTasksSection `yaml:"background_tasks" json:"background_tasks"`
-	GetJobPollInterval time.Duration          `yaml:"get_job_poll_interval" json:"poll_interval"`
+	Tasks TasksSection `yaml:"background_tasks" json:"background_tasks"`
 }
 
-type BackgroundTasksSection struct {
+type TasksSection struct {
 	HungJobsMonitor    HungJobsMonitorSection    `yaml:"hung_jobs_monitor" json:"hung_jobs_monitor"`
 	DisableJobsMonitor DisableJobsMonitorSection `yaml:"disable_jobs_monitor" json:"disable_jobs_monitor"`
+	GetJobSettings     GetJobSection             `yaml:"get_job" json:"get_job"`
+}
+
+type GetJobSection struct {
+	PollInterval           time.Duration `yaml:"poll_interval" json:"poll_interval"`
+	JobsBatchSize          int           `yaml:"jobs_batch_size" json:"jobs_batch_size"`
+	MaxParallerNatsPushers int           `yaml:"max_parallel_pushers" json:"max_parallel_pushers"`
 }
 
 type HungJobsMonitorSection struct {
 	PollInterval           time.Duration `yaml:"poll_interval" json:"poll_interval"`
-	JobDeathSecondsTimeout int           `yaml:"job_death_seconds_timeout" json:"job_death_seconds_timeout"`
+	ScheduleTimeoutSeconds int           `yaml:"schedule_timeout_seconds" json:"schedule_timeout_seconds"`
+	ProcTimeoutSeconds     int           `yaml:"proc_timeout_seconds" json:"proc_timeout_seconds"`
 }
 
 type DisableJobsMonitorSection struct {

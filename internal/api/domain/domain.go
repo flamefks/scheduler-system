@@ -5,15 +5,10 @@ import (
 	"time"
 )
 
-// =========================
-// Patch
-// =========================
-
 type PatchScheduleModel struct {
 	RepeatIntervalSec *int32
 	TargetRuns        *int32
 	NextRunAt         *time.Time
-	Status            *string
 }
 
 type PatchJSONField struct {

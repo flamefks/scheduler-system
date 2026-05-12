@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -27,27 +25,25 @@ func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p qpublsher.A
 	}
 }
 
-func (s *SchedulerService) ClaimNextJob(pctx context.Context) uuid.UUID {
+func (s *SchedulerService) ClaimNextJobs(pctx context.Context, jobBatchSize int) []uuid.UUID {
 	ctx, cancel := context.WithTimeout(pctx, 5*time.Second)
 	defer cancel()
 
-	id, err := s.repo.ClaimNextJob(ctx)
+	idList, err := s.repo.ClaimNextJobs(ctx, jobBatchSize)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			s.logger.Error(
-				"failed_claim_job",
-				slog.Any("error", err),
-			)
-		}
-
-		return uuid.Nil
+		s.logger.Error(
+			"failed_claim_jobs",
+			slog.Any("error", err),
+		)
+		return nil
 	}
 
 	s.logger.Info(
-		"success_claim_job",
-		slog.Any("job_id", id),
+		"success_claim_jobs",
+		slog.Int("jobs_count", len(idList)),
+		slog.Any("job_id_list", idList),
 	)
-	return id
+	return idList
 }
 
 func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uuid.UUID) {
@@ -64,6 +60,7 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 			"failed_publish_uuid",
 			slog.Any("error", err),
 		)
+		return
 	}
 	s.logger.Info(
 		"success_publish_job_id",
@@ -72,7 +69,7 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 }
 
 func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
-	JobDeathTimeout int, pollInterval time.Duration) {
+	scheduleJobTimeout int, procJobTimeout int, pollInterval time.Duration) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
@@ -85,7 +82,7 @@ func (s *SchedulerService) MonitorHungedTasks(parentCtx context.Context,
 			return
 		case <-ticker.C:
 			dbCtx, stop := context.WithTimeout(ctx, 5*time.Second)
-			err := s.repo.ResetHungMessage(dbCtx, JobDeathTimeout)
+			err := s.repo.ResetHungMessage(dbCtx, scheduleJobTimeout, procJobTimeout)
 			stop()
 			if err != nil {
 				s.logger.Error(

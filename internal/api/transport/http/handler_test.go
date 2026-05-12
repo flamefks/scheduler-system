@@ -127,12 +127,16 @@ func TestApiHandler_CreateJob(t *testing.T) {
 				"next_run_at":"2026-04-22T10:00:00Z"
 			},
 			"fetcher_config":{
-				"payload":"e30=",
-				"headers":"e30="
+				"target_url":"https://fetcher.example/jobs",
+				"method":"POST",
+				"payload":{},
+				"headers":{"Authorization":"token"}
 			},
 			"deliver_config":{
-				"payload":"e30=",
-				"headers":"e30="
+				"target_url":"https://deliver.example/jobs",
+				"method":"POST",
+				"payload":{},
+				"headers":{"Authorization":"token"}
 			}
 		}`)
 
@@ -174,8 +178,18 @@ func TestApiHandler_CreateJob(t *testing.T) {
 				"target_runs":3,
 				"next_run_at":"2026-04-22T10:00:00Z"
 			},
-			"fetcher_config":{"payload":"e30=","headers":"e30="},
-			"deliver_config":{"payload":"e30=","headers":"e30="}
+			"fetcher_config":{
+				"target_url":"https://fetcher.example/jobs",
+				"method":"POST",
+				"payload":{},
+				"headers":{"Authorization":"token"}
+			},
+			"deliver_config":{
+				"target_url":"https://deliver.example/jobs",
+				"method":"POST",
+				"payload":{},
+				"headers":{"Authorization":"token"}
+			}
 		}`)
 
 		req := httptest.NewRequest(stdhttp.MethodPost, "/jobs", bytes.NewReader(body))

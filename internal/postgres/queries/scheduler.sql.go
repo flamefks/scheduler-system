@@ -11,40 +11,56 @@ import (
 	"github.com/google/uuid"
 )
 
-const claimNextJob = `-- name: ClaimNextJob :one
-UPDATE job_schedules
-SET
-    status = 'running',
-    scheduled_runs = scheduled_runs + 1,
-    last_run_at = NOW(),
-    next_run_at = CASE
-        WHEN repeat_interval_sec > 0
-            THEN NOW() + (repeat_interval_sec * INTERVAL '1 second')
-        ELSE NULL
-    END,
-    updated_at = NOW()
-WHERE job_id = (
+const claimNextJobs = `-- name: ClaimNextJobs :many
+WITH picked AS (
     SELECT s.job_id
     FROM job_schedules s
     WHERE s.status = 'idle'
       AND s.next_run_at IS NOT NULL
       AND s.next_run_at <= NOW()
       AND (
-            s.target_runs IS NULL
-            OR s.scheduled_runs < s.target_runs
+            s.target_runs = 0
+            OR s.done_runs < s.target_runs
           )
     ORDER BY s.next_run_at
     FOR UPDATE SKIP LOCKED
-    LIMIT 1
+    LIMIT $1::int
 )
-RETURNING job_id
+UPDATE job_schedules s
+SET
+    status = 'scheduled',
+    last_run_at = NOW(),
+    next_run_at = CASE
+        WHEN target_runs != 0 AND done_runs + 1 >= target_runs
+            THEN NULL
+        WHEN s.repeat_interval_sec > 0
+            THEN NOW() + (s.repeat_interval_sec * INTERVAL '1 second')
+        ELSE NOW()
+    END,
+    updated_at = NOW()
+FROM picked
+WHERE s.job_id = picked.job_id
+RETURNING s.job_id
 `
 
-func (q *Queries) ClaimNextJob(ctx context.Context) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, claimNextJob)
-	var job_id uuid.UUID
-	err := row.Scan(&job_id)
-	return job_id, err
+func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, claimNextJobs, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var job_id uuid.UUID
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const resetHungMessage = `-- name: ResetHungMessage :exec
@@ -52,12 +68,19 @@ UPDATE job_schedules
 SET
     status = 'idle',
     updated_at = NOW()
-WHERE status = 'running'
-  AND NOW() - last_run_at > ($1::bigint * interval '1 second')
+WHERE (status IN ('fetching', 'delivering')
+  AND NOW() - last_run_at > ($1::bigint * interval '1 second'))
+OR (status = 'scheduled'
+  AND NOW() - last_run_at > ($2::bigint * interval '1 second'))
 `
 
-func (q *Queries) ResetHungMessage(ctx context.Context, timeoutSeconds int64) error {
-	_, err := q.db.Exec(ctx, resetHungMessage, timeoutSeconds)
+type ResetHungMessageParams struct {
+	ProcTimeoutSeconds     int64
+	ScheduleTimeoutSeconds int64
+}
+
+func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessageParams) error {
+	_, err := q.db.Exec(ctx, resetHungMessage, arg.ProcTimeoutSeconds, arg.ScheduleTimeoutSeconds)
 	return err
 }
 
@@ -66,7 +89,7 @@ UPDATE job_schedules
 SET
     status = 'disabled'
 WHERE status = 'idle'
-    AND scheduled_runs = target_runs
+    AND done_runs >= target_runs AND target_runs != 0
 `
 
 func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) error {

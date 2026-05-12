@@ -19,7 +19,7 @@ type Schedule struct {
 	Status            string
 	RepeatIntervalSec int32
 	TargetRuns        int32
-	ScheduledRuns     int32
+	DoneRuns          int32
 	NextRunAt         time.Time
 	LastRunAt         *time.Time
 }

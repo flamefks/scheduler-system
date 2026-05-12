@@ -19,20 +19,32 @@ func ValidateCore(cfg *CoreConfig) (*CoreConfig, error) {
 		cfg.Nats.Url = nats.DefaultURL
 	}
 
-	if cfg.GetJobPollInterval == 0 {
-		cfg.GetJobPollInterval = 500 * time.Millisecond
+	if cfg.Tasks.GetJobSettings.PollInterval == 0 {
+		cfg.Tasks.GetJobSettings.PollInterval = 500 * time.Millisecond
 	}
 
-	if cfg.BackgroundTasks.HungJobsMonitor.PollInterval == 0 {
-		cfg.BackgroundTasks.HungJobsMonitor.PollInterval = 500 * time.Millisecond
+	if cfg.Tasks.GetJobSettings.JobsBatchSize == 0 {
+		cfg.Tasks.GetJobSettings.JobsBatchSize = 100
 	}
 
-	if cfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout == 0 {
-		cfg.BackgroundTasks.HungJobsMonitor.JobDeathSecondsTimeout = 900
+	if cfg.Tasks.GetJobSettings.MaxParallerNatsPushers == 0 {
+		cfg.Tasks.GetJobSettings.MaxParallerNatsPushers = 256
 	}
 
-	if cfg.BackgroundTasks.DisableJobsMonitor.PollInterval == 0 {
-		cfg.BackgroundTasks.DisableJobsMonitor.PollInterval = 500 * time.Millisecond
+	if cfg.Tasks.HungJobsMonitor.PollInterval == 0 {
+		cfg.Tasks.HungJobsMonitor.PollInterval = 500 * time.Millisecond
+	}
+
+	if cfg.Tasks.HungJobsMonitor.ScheduleTimeoutSeconds == 0 {
+		cfg.Tasks.HungJobsMonitor.ScheduleTimeoutSeconds = 15
+	}
+
+	if cfg.Tasks.HungJobsMonitor.ProcTimeoutSeconds == 0 {
+		cfg.Tasks.HungJobsMonitor.ProcTimeoutSeconds = 900
+	}
+
+	if cfg.Tasks.DisableJobsMonitor.PollInterval == 0 {
+		cfg.Tasks.DisableJobsMonitor.PollInterval = 500 * time.Millisecond
 	}
 
 	return cfg, nil

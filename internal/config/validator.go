@@ -69,10 +69,10 @@ func ValidateHttpRetrySection(cfg *HttpRetryPolicySection) (*HttpRetryPolicySect
 	}
 
 	if cfg.MaxDelay == 0 || cfg.MaxDelay < cfg.BaseDelay {
-		cfg.MaxDelay = cfg.BaseDelay + 1
+		cfg.MaxDelay = cfg.BaseDelay
 	}
 
-	if cfg.Backoff != "fixed" && cfg.Backoff == "exponential" {
+	if cfg.Backoff != "fixed" && cfg.Backoff != "exponential" {
 		cfg.Backoff = "fixed"
 	}
 

@@ -57,8 +57,8 @@ services:
     depends_on:
       nats:
         condition: service_healthy
-    environment:
-      NATS_URL: nats://nats:4222
+    volumes:
+      - ./configs/nats-init.yml:/app/config/core.yml:ro
     restart: "no"
 
   api:

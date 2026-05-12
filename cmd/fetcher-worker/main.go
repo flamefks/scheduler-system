@@ -52,7 +52,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	b, err = yaml.Marshal(logCfg)
+	b, err = yaml.Marshal(coreCfg)
 	if err != nil {
 		log.Fatal(err)
 	}

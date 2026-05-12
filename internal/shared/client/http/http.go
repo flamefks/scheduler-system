@@ -3,11 +3,16 @@ package shared
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/flamefks/scheduler-system/internal/shared/data"
+)
+
+const (
+	maxResponseBytesSize = 100 << 20
 )
 
 type HTTPClient struct {
@@ -46,9 +51,15 @@ func (c *HTTPClient) Do(ctx context.Context, req *data.Request) (*data.ExternalR
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytesSize+1)
+
+	body, err := io.ReadAll(limitedBody)
 	if err != nil {
 		return nil, err
+	}
+
+	if int64(len(body)) > maxResponseBytesSize {
+		return nil, fmt.Errorf("response body too large: limit %d bytes", maxResponseBytesSize)
 	}
 
 	return &data.ExternalResponse{

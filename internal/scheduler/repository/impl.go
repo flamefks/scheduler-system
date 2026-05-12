@@ -20,12 +20,15 @@ func NewSchedulerRepository(pool *pgxpool.Pool, q *db.Queries) *SchedulerReposit
 	}
 }
 
-func (repo *SchedulerRepository) ClaimNextJob(ctx context.Context) (uuid.UUID, error) {
-	return repo.q.ClaimNextJob(ctx)
+func (repo *SchedulerRepository) ClaimNextJobs(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error) {
+	return repo.q.ClaimNextJobs(ctx, int32(jobBatchSize))
 }
 
-func (repo *SchedulerRepository) ResetHungMessage(ctx context.Context, JobDeathTimeout int) error {
-	return repo.q.ResetHungMessage(ctx, int64(JobDeathTimeout))
+func (repo *SchedulerRepository) ResetHungMessage(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) error {
+	return repo.q.ResetHungMessage(ctx, db.ResetHungMessageParams{
+		ScheduleTimeoutSeconds: int64(scheduleJobTimeout),
+		ProcTimeoutSeconds:     int64(procJobTimeout),
+	})
 }
 
 func (repo *SchedulerRepository) SwitchToDisabledIfNeed(ctx context.Context) error {

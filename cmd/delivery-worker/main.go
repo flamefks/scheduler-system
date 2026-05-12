@@ -52,7 +52,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	b, err = yaml.Marshal(logCfg)
+	b, err = yaml.Marshal(coreCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func main() {
 	logger.Info("service_started")
 
 	if err := consumer.Consume(appCtx, schedulerService.PipelineHandler, schedulerService.HandleError,
-		sharedData.FetcherGroup); err != nil {
+		sharedData.DeliverGroup); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)
 	}

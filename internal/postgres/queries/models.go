@@ -57,10 +57,12 @@ func (ns NullJobIoKind) Value() (driver.Value, error) {
 type ScheduleStatus string
 
 const (
-	ScheduleStatusIdle     ScheduleStatus = "idle"
-	ScheduleStatusRunning  ScheduleStatus = "running"
-	ScheduleStatusError    ScheduleStatus = "error"
-	ScheduleStatusDisabled ScheduleStatus = "disabled"
+	ScheduleStatusIdle       ScheduleStatus = "idle"
+	ScheduleStatusScheduled  ScheduleStatus = "scheduled"
+	ScheduleStatusFetching   ScheduleStatus = "fetching"
+	ScheduleStatusDelivering ScheduleStatus = "delivering"
+	ScheduleStatusError      ScheduleStatus = "error"
+	ScheduleStatusDisabled   ScheduleStatus = "disabled"
 )
 
 func (e *ScheduleStatus) Scan(src interface{}) error {
@@ -125,5 +127,5 @@ type JobSchedule struct {
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
-	ScheduledRuns     int32
+	DoneRuns          int32
 }
