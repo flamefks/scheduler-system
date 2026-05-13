@@ -29,7 +29,7 @@ WITH picked AS (
 UPDATE job_schedules s
 SET
     status = 'scheduled',
-    last_run_at = NOW(),
+    last_scheduled_at = NOW(),
     next_run_at = CASE
         WHEN target_runs != 0 AND done_runs + 1 >= target_runs
             THEN NULL
@@ -69,9 +69,9 @@ SET
     status = 'idle',
     updated_at = NOW()
 WHERE (status IN ('fetching', 'delivering')
-  AND NOW() - last_run_at > ($1::bigint * interval '1 second'))
+  AND NOW() - COALESCE(last_run_taken_at, last_scheduled_at) > ($1::bigint * interval '1 second'))
 OR (status = 'scheduled'
-  AND NOW() - last_run_at > ($2::bigint * interval '1 second'))
+  AND NOW() - last_scheduled_at > ($2::bigint * interval '1 second'))
 `
 
 type ResetHungMessageParams struct {

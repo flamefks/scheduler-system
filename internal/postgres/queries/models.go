@@ -123,9 +123,10 @@ type JobSchedule struct {
 	Status            ScheduleStatus
 	RepeatIntervalSec int32
 	TargetRuns        int32
-	LastRunAt         *time.Time
+	LastScheduledAt   *time.Time
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DoneRuns          int32
+	LastRunTakenAt    *time.Time
 }

@@ -100,7 +100,7 @@ INSERT INTO job_schedules (
     job_id,
     repeat_interval_sec,
     target_runs,
-    last_run_at,
+    last_scheduled_at,
     next_run_at
 ) VALUES (
     $1, $2, $3, NULL, $4
@@ -183,7 +183,8 @@ SELECT
     repeat_interval_sec,
     done_runs,
     target_runs,
-    last_run_at,
+    last_scheduled_at,
+    last_run_taken_at,
     next_run_at,
     created_at,
     updated_at
@@ -197,7 +198,8 @@ type GetJobScheduleRow struct {
 	RepeatIntervalSec int32
 	DoneRuns          int32
 	TargetRuns        int32
-	LastRunAt         *time.Time
+	LastScheduledAt   *time.Time
+	LastRunTakenAt    *time.Time
 	NextRunAt         time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
@@ -212,7 +214,8 @@ func (q *Queries) GetJobSchedule(ctx context.Context, jobID uuid.UUID) (GetJobSc
 		&i.RepeatIntervalSec,
 		&i.DoneRuns,
 		&i.TargetRuns,
-		&i.LastRunAt,
+		&i.LastScheduledAt,
+		&i.LastRunTakenAt,
 		&i.NextRunAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,

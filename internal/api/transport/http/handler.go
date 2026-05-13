@@ -53,7 +53,8 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 			TargetRuns:        req.Schedule.TargetRuns,
 			DoneRuns:          0,
 			NextRunAt:         req.Schedule.NextRunAt,
-			LastRunAt:         nil,
+			LastScheduledAt:   nil,
+			LastRunTakenAt:    nil,
 		},
 		FetcherConfig: data.IOConfig{
 			TargetUrl:  req.FetcherConfig.TargetURL,

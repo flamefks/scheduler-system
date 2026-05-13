@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/flamefks/scheduler-system/internal/shared/data"
+	natsqueue "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
@@ -129,8 +130,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, nats.Header{}, &needSetDbStatus)
-		if err == nil {
-			t.Fatal("expected error")
+		if !errors.Is(err, natsqueue.TermError) {
+			t.Fatalf("expected term error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -148,8 +149,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, repoErr) {
-			t.Fatalf("expected repo error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -166,8 +167,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
-		if err == nil {
-			t.Fatal("expected error")
+		if !errors.Is(err, natsqueue.TermError) {
+			t.Fatalf("expected term error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -227,8 +228,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, httpErr) {
-			t.Fatalf("expected http error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != http.StatusGatewayTimeout {
 			t.Fatalf("expected status %d, got %d", http.StatusGatewayTimeout, statusCode)
@@ -258,8 +259,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, statusErr) {
-			t.Fatalf("expected status error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -284,31 +285,28 @@ func TestDeliverService_HandleError(t *testing.T) {
 		}
 		svc := NewDeliverService(deliverTestLogger(), repo)
 
-		if err := svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID)); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID))
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
 		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{})
 
-		if err := svc.HandleError(context.Background(), nil, nats.Header{}); err == nil {
-			t.Fatal("expected error")
-		}
+		svc.HandleError(context.Background(), nil, nats.Header{})
 	})
 
 	t.Run("repo error", func(t *testing.T) {
-		repoErr := errors.New("set status failed")
+		called := false
 		repo := &mockDeliverRepo{
 			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
-				return repoErr
+				called = true
+				return errors.New("set status failed")
 			},
 		}
 		svc := NewDeliverService(deliverTestLogger(), repo)
 
-		err := svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID))
-		if !errors.Is(err, repoErr) {
-			t.Fatalf("expected repo error, got %v", err)
+		svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID))
+		if !called {
+			t.Fatal("expected repo set status to be called")
 		}
 	})
 }

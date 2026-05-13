@@ -159,7 +159,8 @@ func (repo *Repository) GetJobByID(ctx context.Context, id uuid.UUID) (*data.Job
 			TargetRuns:        schedule.TargetRuns,
 			DoneRuns:          schedule.DoneRuns,
 			NextRunAt:         schedule.NextRunAt,
-			LastRunAt:         schedule.LastRunAt,
+			LastScheduledAt:   schedule.LastScheduledAt,
+			LastRunTakenAt:    schedule.LastRunTakenAt,
 		},
 
 		FetcherConfig: fetcher,

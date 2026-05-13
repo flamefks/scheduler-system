@@ -21,7 +21,8 @@ type Schedule struct {
 	TargetRuns        int32
 	DoneRuns          int32
 	NextRunAt         time.Time
-	LastRunAt         *time.Time
+	LastScheduledAt   *time.Time
+	LastRunTakenAt    *time.Time
 }
 
 type Job struct {

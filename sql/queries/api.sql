@@ -42,7 +42,7 @@ INSERT INTO job_schedules (
     job_id,
     repeat_interval_sec,
     target_runs,
-    last_run_at,
+    last_scheduled_at,
     next_run_at
 ) VALUES (
     $1, $2, $3, NULL, $4
@@ -55,7 +55,8 @@ SELECT
     repeat_interval_sec,
     done_runs,
     target_runs,
-    last_run_at,
+    last_scheduled_at,
+    last_run_taken_at,
     next_run_at,
     created_at,
     updated_at

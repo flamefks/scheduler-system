@@ -43,7 +43,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return err, 0
+		return natsqueue.TermError, 0
 	}
 
 	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
@@ -58,7 +58,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 				slog.String("new_status", "fetching"),
 				slog.Any("err", err),
 			)
-			return err, 0
+			return natsqueue.NakError, 0
 		}
 	}
 
@@ -71,7 +71,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, 0
+		return natsqueue.NakError, 0
 	}
 	f.logger.Info(
 		"success_get_config",
@@ -87,7 +87,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 				slog.Any("job_id", jobId),
 				slog.Any("err", err),
 			)
-			return err, 0
+			return natsqueue.TermError, 0
 		}
 	}
 
@@ -110,30 +110,28 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, statusCode
+		return natsqueue.NakError, statusCode
 	}
 	f.logger.Info(
-		"success_sent_reponse",
+		"response",
 		slog.String("job_id", strJobId),
 		slog.Any("data", &response),
 	)
 
-	bytesPayload, err := json.Marshal(response.Body)
-	if err != nil {
-		f.logger.Error(
-			"failed_marshal_http_response",
-			slog.Any("job_id", jobId),
-			slog.Any("err", err),
-		)
-		return err, 0
-	}
 	if len(reqConfig.JsonSchema) > 0 {
-		if err = utils.ValidateRawMessageWithSchema(reqConfig.JsonSchema, bytesPayload); err != nil {
-			return fmt.Errorf("%v: %v", utils.ValidateSchemaError, err), 0
+		if err = utils.ValidateRawMessageWithSchema(reqConfig.JsonSchema, response.Body); err != nil {
+			f.logger.Error(
+				"failed_validate_schema",
+				slog.Any("job_id", jobId),
+				slog.Any("schema", reqConfig.JsonSchema),
+				slog.Any("response", response.Body),
+				slog.Any("err", err),
+			)
+			return natsqueue.TermError, 0
 		}
 	}
 
-	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, bytesPayload, map[string]string{
+	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, response.Body, map[string]string{
 		"job-id": strJobId,
 	})
 
@@ -143,12 +141,12 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			slog.Any("job_id", jobId),
 			slog.Any("error", err),
 		)
-		return err, 0
+		return natsqueue.NakError, 0
 	}
 	return nil, response.StatusCode
 }
 
-func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) error {
+func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -157,7 +155,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return err
+		return
 	}
 
 	err = f.repo.SetJobStatus(ctx, "error", jobId)
@@ -167,13 +165,12 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
-		return err
+		return
 	}
 	f.logger.Info(
 		"success_handle_error",
 		slog.String("job_id", strJobId),
 	)
-	return nil
 }
 
 func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header) error {
@@ -189,8 +186,8 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 
 		err, statusCode := f.Handle(parentCtx, binData, natsHeader, &needNotifyDb)
 		isHttpError := utils.InSlice(config.RetryOnStatus, statusCode)
-		if err == nil && !isHttpError {
-			return nil
+		if !isHttpError {
+			return err
 		}
 
 		f.logger.Warn(
@@ -200,9 +197,9 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 			slog.Any("error", err),
 		)
 
-		if (!config.RetryOnError && !isHttpError) || attempt == config.MaxAttempts-1 {
+		if attempt == config.MaxAttempts-1 {
 			if err == nil && isHttpError {
-				return fmt.Errorf("Http status code error: %d", statusCode)
+				return fmt.Errorf("Http_status_code_error: %d; err = %w", statusCode, natsqueue.NakError)
 			} else {
 				return err
 			}
