@@ -79,3 +79,10 @@ func ValidateHttpRetrySection(cfg *HttpRetryPolicySection) (*HttpRetryPolicySect
 	return cfg, nil
 
 }
+
+func ValidateOtelSection(cfg *OtelSection) (*OtelSection, error) {
+	if cfg.Endpoint == "" {
+		cfg.Endpoint = "otel-collector:4317"
+	}
+	return cfg, nil
+}

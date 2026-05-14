@@ -58,7 +58,7 @@ func handlerLogger() *slog.Logger {
 
 func newHandler(repo *mockRepo) *ApiHandler {
 	svc := apiservice.NewApiService(handlerLogger(), repo)
-	return NewApiHandler(svc)
+	return NewApiHandler(svc, nil)
 }
 
 func withURLParam(req *stdhttp.Request, key, value string) *stdhttp.Request {

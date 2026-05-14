@@ -55,6 +55,25 @@ func Init(ctx context.Context, serviceName, serviceVersion, otlpEndpoint string)
 			metricExporter,
 			metric.WithInterval(10*time.Second),
 		)),
+		metric.WithView(metric.NewView(
+			metric.Instrument{Name: "http_request_duration_seconds"},
+			metric.Stream{
+				Aggregation: metric.AggregationExplicitBucketHistogram{
+					Boundaries: []float64{
+						0.01,
+						0.03,
+						0.05,
+						0.1,
+						0.25,
+						0.5,
+						1,
+						3,
+						5,
+						10,
+					},
+				},
+			},
+		)),
 	)
 
 	otel.SetTracerProvider(tracerProvider)

@@ -15,9 +15,10 @@ var (
 )
 
 type CoreConfig struct {
-	Service  generalConf.ServiceSection   `yaml:"service" json:"service"`
-	HTTP     HttpSection                  `yaml:"http" json:"http"`
-	Postgres *generalConf.PostgresSection `yaml:"database" json:"database"`
+	Service     generalConf.ServiceSection   `yaml:"service" json:"service"`
+	HTTP        HttpSection                  `yaml:"http" json:"http"`
+	Postgres    *generalConf.PostgresSection `yaml:"database" json:"database"`
+	OtelSection generalConf.OtelSection      `yaml:"otel" json:"otel"`
 }
 
 type HttpSection struct {
@@ -57,9 +58,15 @@ func loadCoreConfig(path string) (*CoreConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	cfg.Postgres = dbSection
 	cfg, err = ValidateCore(cfg)
+
+	otelSection, err := globalConf.ValidateOtelSection(&cfg.OtelSection)
+	if err != nil {
+		return nil, err
+	}
+	cfg.OtelSection = *otelSection
+
 	if err != nil {
 		return nil, err
 	}

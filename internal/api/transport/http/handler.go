@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/flamefks/scheduler-system/internal/api/apperrors"
 	"github.com/flamefks/scheduler-system/internal/api/domain"
+	apimetrics "github.com/flamefks/scheduler-system/internal/api/metrics"
 	"github.com/flamefks/scheduler-system/internal/api/service"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
 	"github.com/go-chi/chi/v5"
@@ -16,15 +18,19 @@ import (
 
 type ApiHandler struct {
 	apiService *service.ApiService
+	metrics    *apimetrics.ApiMetrics
 }
 
-func NewApiHandler(service *service.ApiService) *ApiHandler {
+func NewApiHandler(service *service.ApiService, metrics *apimetrics.ApiMetrics) *ApiHandler {
 	return &ApiHandler{
 		apiService: service,
+		metrics:    metrics,
 	}
 }
 
 func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	var req CreateJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.apiService.Logger.Warn(
@@ -32,6 +38,7 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "decode_request"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationCreateJob, http.StatusBadRequest, time.Since(startedAt))
 		writeError(w, apperrors.ErrInvalidJSON)
 		return
 	}
@@ -42,6 +49,7 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "validate_request"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationCreateJob, http.StatusBadRequest, time.Since(startedAt))
 		writeError(w, apperrors.ErrInvalidRequest)
 		return
 	}
@@ -74,10 +82,12 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 	jobID, err := h.apiService.CreateJob(r.Context(), jobDomain)
 	if err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationCreateJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationCreateJob, http.StatusCreated, time.Since(startedAt))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"status": "success",
 		"data": map[string]string{
@@ -87,6 +97,8 @@ func (h *ApiHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ApiHandler) GetJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	id, err := CheckUUID(chi.URLParam(r, "id"), w)
 	if err != nil {
 		h.apiService.Logger.Warn(
@@ -94,16 +106,19 @@ func (h *ApiHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "parse_uuid"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationGetJob, http.StatusUnprocessableEntity, time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
 	job, err := h.apiService.GetJobByID(r.Context(), id)
 	if err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationGetJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationGetJob, http.StatusOK, time.Since(startedAt))
 	writeJSON(w, http.StatusOK, GetJobResponse{
 		Status: "success",
 		Data:   job,
@@ -111,6 +126,8 @@ func (h *ApiHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	id, err := CheckUUID(chi.URLParam(r, "id"), w)
 	if err != nil {
 		h.apiService.Logger.Warn(
@@ -118,6 +135,7 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "parse_uuid"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationPatchJob, http.StatusUnprocessableEntity, time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
@@ -129,6 +147,7 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "decode_request"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationPatchJob, http.StatusBadRequest, time.Since(startedAt))
 		writeError(w, apperrors.ErrInvalidJSON)
 		return
 	}
@@ -139,6 +158,7 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "validate_request"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationPatchJob, http.StatusBadRequest, time.Since(startedAt))
 		writeError(w, apperrors.ErrInvalidRequest)
 		return
 	}
@@ -194,10 +214,12 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.apiService.PatchJob(r.Context(), patch, id); err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationPatchJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationPatchJob, http.StatusOK, time.Since(startedAt))
 	writeJSON(w, http.StatusOK, data.BasicResonse{
 		Status:  "success",
 		Message: "Job successfully updated",
@@ -205,6 +227,8 @@ func (h *ApiHandler) UpdateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ApiHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	id, err := CheckUUID(chi.URLParam(r, "id"), w)
 	if err != nil {
 		h.apiService.Logger.Warn(
@@ -212,19 +236,24 @@ func (h *ApiHandler) DeleteJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "parse_uuid"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeleteJob, http.StatusUnprocessableEntity, time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
 	if err := h.apiService.DeleteJob(r.Context(), id); err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeleteJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeleteJob, http.StatusNoContent, time.Since(startedAt))
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ApiHandler) ActivateJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	id, err := CheckUUID(chi.URLParam(r, "id"), w)
 	if err != nil {
 		h.apiService.Logger.Warn(
@@ -232,15 +261,18 @@ func (h *ApiHandler) ActivateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "parse_uuid"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationActivateJob, http.StatusUnprocessableEntity, time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
 	if err := h.apiService.ActivateJob(r.Context(), id); err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationActivateJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationActivateJob, http.StatusOK, time.Since(startedAt))
 	writeJSON(w, http.StatusOK, data.BasicResonse{
 		Status:  "success",
 		Message: "Job successfully activated",
@@ -248,6 +280,8 @@ func (h *ApiHandler) ActivateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ApiHandler) DeactivateJob(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+
 	id, err := CheckUUID(chi.URLParam(r, "id"), w)
 	if err != nil {
 		h.apiService.Logger.Warn(
@@ -255,15 +289,18 @@ func (h *ApiHandler) DeactivateJob(w http.ResponseWriter, r *http.Request) {
 			slog.Any("state", "parse_uuid"),
 			slog.Any("error", err),
 		)
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeactivateJob, http.StatusUnprocessableEntity, time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
 	if err := h.apiService.DeactivateJob(r.Context(), id); err != nil {
+		h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeactivateJob, statusCodeFromError(err), time.Since(startedAt))
 		writeError(w, err)
 		return
 	}
 
+	h.metrics.RecordHTTP(r.Context(), apimetrics.OperationDeactivateJob, http.StatusOK, time.Since(startedAt))
 	writeJSON(w, http.StatusOK, data.BasicResonse{
 		Status:  "success",
 		Message: "Job successfully deactivated",
@@ -283,6 +320,25 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func statusCodeFromError(err error) int {
+	switch {
+	case errors.Is(err, apperrors.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, apperrors.ErrInvalidStatus):
+		return http.StatusBadRequest
+	case errors.Is(err, apperrors.ErrStatusConflict):
+		return http.StatusConflict
+	case errors.Is(err, apperrors.ErrInvalidJSON):
+		return http.StatusBadRequest
+	case errors.Is(err, apperrors.ErrInvalidRequest):
+		return http.StatusBadRequest
+	case errors.Is(err, apperrors.ErrInvalidUUID):
+		return http.StatusUnprocessableEntity
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func writeError(w http.ResponseWriter, err error) {

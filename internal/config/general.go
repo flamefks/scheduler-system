@@ -39,3 +39,10 @@ type HttpRetryPolicySection struct {
 	Backoff       string        `yaml:"back_off" json:"back_off"` // fixed | exponential
 	RetryOnStatus []int         `yaml:"retry_on_status" json:"retry_on_status"`
 }
+
+type OtelSection struct {
+	Endpoint string `yaml:"endpoint" json:"endpoint"`
+	Metrics  struct {
+		Enable bool `yaml:"enable" json:"enable"`
+	} `yaml:"metrics" json:"metrics"`
+}
