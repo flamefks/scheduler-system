@@ -12,7 +12,8 @@ type CoreConfig struct {
 	Nats     struct {
 		Url string `yaml:"url" json:"url"`
 	} `yaml:"nats" json:"nats"`
-	Tasks TasksSection `yaml:"background_tasks" json:"background_tasks"`
+	Tasks       TasksSection            `yaml:"background_tasks" json:"background_tasks"`
+	OtelSection generalConf.OtelSection `yaml:"otel" json:"otel"`
 }
 
 type TasksSection struct {

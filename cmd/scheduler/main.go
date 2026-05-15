@@ -14,6 +14,7 @@ import (
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
 	coreConf "github.com/flamefks/scheduler-system/internal/scheduler/config"
+	schedulermetrics "github.com/flamefks/scheduler-system/internal/scheduler/metrics"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
@@ -84,7 +85,14 @@ func main() {
 	//logic
 	publisher := qnats.NewPublisher(js)
 	repository := repo.NewSchedulerRepository(pool, queries)
-	schedulerService := service.NewSchedulerService(logger, repository, publisher)
+	schedulerMetrics, err := schedulermetrics.NewSchedulerMetrics()
+	if err != nil {
+		logger.Warn(
+			"scheduler_metrics_init_failed",
+			slog.Any("error", err),
+		)
+	}
+	schedulerService := service.NewSchedulerService(logger, repository, publisher, schedulerMetrics)
 
 	// Bacground checkers
 	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.Tasks.HungJobsMonitor.ScheduleTimeoutSeconds,

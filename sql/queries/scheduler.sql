@@ -29,7 +29,7 @@ FROM picked
 WHERE s.job_id = picked.job_id
 RETURNING s.job_id;
 
--- name: ResetHungMessage :exec
+-- name: ResetHungMessage :execrows
 UPDATE job_schedules
 SET
     status = 'idle',
@@ -39,7 +39,7 @@ WHERE (status IN ('fetching', 'delivering')
 OR (status = 'scheduled'
   AND NOW() - last_scheduled_at > (sqlc.arg(schedule_timeout_seconds)::bigint * interval '1 second'));
 
--- name: SwitchToDisabledIfNeed :exec
+-- name: SwitchToDisabledIfNeed :execrows
 UPDATE job_schedules
 SET
     status = 'disabled'

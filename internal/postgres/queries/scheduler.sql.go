@@ -63,7 +63,7 @@ func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]uuid.UU
 	return items, nil
 }
 
-const resetHungMessage = `-- name: ResetHungMessage :exec
+const resetHungMessage = `-- name: ResetHungMessage :execrows
 UPDATE job_schedules
 SET
     status = 'idle',
@@ -79,12 +79,15 @@ type ResetHungMessageParams struct {
 	ScheduleTimeoutSeconds int64
 }
 
-func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessageParams) error {
-	_, err := q.db.Exec(ctx, resetHungMessage, arg.ProcTimeoutSeconds, arg.ScheduleTimeoutSeconds)
-	return err
+func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resetHungMessage, arg.ProcTimeoutSeconds, arg.ScheduleTimeoutSeconds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :exec
+const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :execrows
 UPDATE job_schedules
 SET
     status = 'disabled'
@@ -92,7 +95,10 @@ WHERE status = 'idle'
     AND done_runs >= target_runs AND target_runs != 0
 `
 
-func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, switchToDisabledIfNeed)
-	return err
+func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, switchToDisabledIfNeed)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
