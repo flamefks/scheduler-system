@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/flamefks/scheduler-system/internal/shared/data"
+	natsqueue "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
@@ -60,7 +61,7 @@ func TestNewFetcherService(t *testing.T) {
 	repo := &mockFetcherRepo{}
 	publisher := &mockFetcherPublisher{}
 
-	svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+	svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -115,7 +116,7 @@ func TestFetcherService_Handle(t *testing.T) {
 			},
 		}
 
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if req.Method != http.MethodPost {
@@ -148,12 +149,12 @@ func TestFetcherService_Handle(t *testing.T) {
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{})
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{}, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, nats.Header{}, &needSetDbStatus)
-		if err == nil {
-			t.Fatal("expected error")
+		if !errors.Is(err, natsqueue.TermError) {
+			t.Fatalf("expected term error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -167,12 +168,12 @@ func TestFetcherService_Handle(t *testing.T) {
 				return nil, repoErr
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, repoErr) {
-			t.Fatalf("expected repo error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -185,12 +186,12 @@ func TestFetcherService_Handle(t *testing.T) {
 				return &data.IOConfig{Headers: json.RawMessage(`{bad}`)}, nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
-		if err == nil {
-			t.Fatal("expected error")
+		if !errors.Is(err, natsqueue.TermError) {
+			t.Fatalf("expected term error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -212,7 +213,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if len(req.Headers) != 0 {
@@ -242,7 +243,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				}, nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 		httpErr := errors.New("temporary failure")
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
@@ -252,8 +253,8 @@ func TestFetcherService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, httpErr) {
-			t.Fatalf("expected http error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != http.StatusBadGateway {
 			t.Fatalf("expected status %d, got %d", http.StatusBadGateway, statusCode)
@@ -276,7 +277,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return publishErr
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				return &data.ExternalResponse{StatusCode: http.StatusOK}, nil
@@ -285,8 +286,8 @@ func TestFetcherService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
-		if !errors.Is(err, publishErr) {
-			t.Fatalf("expected publish error, got %v", err)
+		if !errors.Is(err, natsqueue.NakError) {
+			t.Fatalf("expected nak error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -309,33 +310,30 @@ func TestFetcherService_ErrorHandler(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
-		if err := svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID)); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID))
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{})
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{}, nil)
 
-		if err := svc.ErrorHandler(context.Background(), nil, nats.Header{}); err == nil {
-			t.Fatal("expected error")
-		}
+		svc.ErrorHandler(context.Background(), nil, nats.Header{})
 	})
 
 	t.Run("repo error", func(t *testing.T) {
-		repoErr := errors.New("set status failed")
+		called := false
 		repo := &mockFetcherRepo{
 			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
-				return repoErr
+				called = true
+				return errors.New("set status failed")
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
-		err := svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID))
-		if !errors.Is(err, repoErr) {
-			t.Fatalf("expected repo error, got %v", err)
+		svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID))
+		if !called {
+			t.Fatal("expected repo set status to be called")
 		}
 	})
 }

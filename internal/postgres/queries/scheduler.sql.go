@@ -29,7 +29,7 @@ WITH picked AS (
 UPDATE job_schedules s
 SET
     status = 'scheduled',
-    last_run_at = NOW(),
+    last_scheduled_at = NOW(),
     next_run_at = CASE
         WHEN target_runs != 0 AND done_runs + 1 >= target_runs
             THEN NULL
@@ -63,15 +63,15 @@ func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]uuid.UU
 	return items, nil
 }
 
-const resetHungMessage = `-- name: ResetHungMessage :exec
+const resetHungMessage = `-- name: ResetHungMessage :execrows
 UPDATE job_schedules
 SET
     status = 'idle',
     updated_at = NOW()
 WHERE (status IN ('fetching', 'delivering')
-  AND NOW() - last_run_at > ($1::bigint * interval '1 second'))
+  AND NOW() - COALESCE(last_run_taken_at, last_scheduled_at) > ($1::bigint * interval '1 second'))
 OR (status = 'scheduled'
-  AND NOW() - last_run_at > ($2::bigint * interval '1 second'))
+  AND NOW() - last_scheduled_at > ($2::bigint * interval '1 second'))
 `
 
 type ResetHungMessageParams struct {
@@ -79,12 +79,15 @@ type ResetHungMessageParams struct {
 	ScheduleTimeoutSeconds int64
 }
 
-func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessageParams) error {
-	_, err := q.db.Exec(ctx, resetHungMessage, arg.ProcTimeoutSeconds, arg.ScheduleTimeoutSeconds)
-	return err
+func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessageParams) (int64, error) {
+	result, err := q.db.Exec(ctx, resetHungMessage, arg.ProcTimeoutSeconds, arg.ScheduleTimeoutSeconds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :exec
+const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :execrows
 UPDATE job_schedules
 SET
     status = 'disabled'
@@ -92,7 +95,10 @@ WHERE status = 'idle'
     AND done_runs >= target_runs AND target_runs != 0
 `
 
-func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, switchToDisabledIfNeed)
-	return err
+func (q *Queries) SwitchToDisabledIfNeed(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, switchToDisabledIfNeed)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

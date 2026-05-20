@@ -52,6 +52,11 @@ const setJobStatus = `-- name: SetJobStatus :exec
 UPDATE job_schedules
 SET
     status = $1,
+    last_run_taken_at = CASE
+        WHEN $1::schedule_status IN ('fetching', 'delivering')
+            THEN NOW()
+        ELSE last_run_taken_at
+    END,
     done_runs = CASE
         WHEN $1::schedule_status IN ('idle', 'error')
             THEN done_runs + 1

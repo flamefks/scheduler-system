@@ -31,10 +31,11 @@ func GetCoreConfig() *CoreConfig {
 }
 
 type CoreConfig struct {
-	Service   globalConf.ServiceSection         `yaml:"service" json:"service"`
-	Postgres  *globalConf.PostgresSection       `yaml:"database" json:"database"`
-	HttpRetry globalConf.HttpRetryPolicySection `yaml:"http_retry" json:"http_retry"`
-	Nats      struct {
+	Service     globalConf.ServiceSection         `yaml:"service" json:"service"`
+	Postgres    *globalConf.PostgresSection       `yaml:"database" json:"database"`
+	HttpRetry   globalConf.HttpRetryPolicySection `yaml:"http_retry" json:"http_retry"`
+	OtelSection globalConf.OtelSection            `yaml:"otel" json:"otel"`
+	Nats        struct {
 		Url string `yaml:"url" json:"url"`
 	} `yaml:"nats" json:"nats"`
 }
@@ -57,6 +58,13 @@ func loadCoreConfig(path string) (*CoreConfig, error) {
 
 	cfg.Postgres = dbSection
 	cfg.HttpRetry = *httpRetrySection
+
+	otelSection, err := globalConf.ValidateOtelSection(&cfg.OtelSection)
+	if err != nil {
+		return nil, err
+	}
+	cfg.OtelSection = *otelSection
+
 	cfg, err = ValidateCore(cfg)
 	if err != nil {
 		return nil, err

@@ -14,19 +14,19 @@ import (
 
 type mockSchedulerRepo struct {
 	claimNextJobsFn          func(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error)
-	resetHungMessageFn       func(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) error
-	switchToDisabledIfNeedFn func(ctx context.Context) error
+	resetHungMessageFn       func(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) (int64, error)
+	switchToDisabledIfNeedFn func(ctx context.Context) (int64, error)
 }
 
 func (m *mockSchedulerRepo) ClaimNextJobs(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error) {
 	return m.claimNextJobsFn(ctx, jobBatchSize)
 }
 
-func (m *mockSchedulerRepo) ResetHungMessage(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) error {
+func (m *mockSchedulerRepo) ResetHungMessage(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) (int64, error) {
 	return m.resetHungMessageFn(ctx, scheduleJobTimeout, procJobTimeout)
 }
 
-func (m *mockSchedulerRepo) SwitchToDisabledIfNeed(ctx context.Context) error {
+func (m *mockSchedulerRepo) SwitchToDisabledIfNeed(ctx context.Context) (int64, error) {
 	return m.switchToDisabledIfNeedFn(ctx)
 }
 
@@ -46,7 +46,7 @@ func TestNewSchedulerService(t *testing.T) {
 	repo := &mockSchedulerRepo{}
 	publisher := &mockSchedulerPublisher{}
 
-	svc := NewSchedulerService(schedulerTestLogger(), repo, publisher)
+	svc := NewSchedulerService(schedulerTestLogger(), repo, publisher, nil)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -71,7 +71,7 @@ func TestSchedulerService_ClaimNextJobs(t *testing.T) {
 				return expectedIDs, nil
 			},
 		}
-		svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{})
+		svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{}, nil)
 
 		got := svc.ClaimNextJobs(context.Background(), 2)
 		if len(got) != len(expectedIDs) {
@@ -91,7 +91,7 @@ func TestSchedulerService_ClaimNextJobs(t *testing.T) {
 				return nil, repoErr
 			},
 		}
-		svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{})
+		svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{}, nil)
 
 		got := svc.ClaimNextJobs(context.Background(), 2)
 		if got != nil {
@@ -118,7 +118,7 @@ func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher)
+		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher, nil)
 
 		svc.PublishJobIdToChannel(context.Background(), jobID)
 	})
@@ -129,7 +129,7 @@ func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 				return errors.New("publish failed")
 			},
 		}
-		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher)
+		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher, nil)
 
 		svc.PublishJobIdToChannel(context.Background(), jobID)
 	})
@@ -138,15 +138,15 @@ func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 func TestSchedulerService_MonitorHungedTasks(t *testing.T) {
 	called := make(chan int, 1)
 	repo := &mockSchedulerRepo{
-		resetHungMessageFn: func(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) error {
+		resetHungMessageFn: func(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) (int64, error) {
 			if procJobTimeout != 30 {
 				t.Fatalf("expected proc timeout 30, got %d", procJobTimeout)
 			}
 			called <- scheduleJobTimeout
-			return nil
+			return 2, nil
 		},
 	}
-	svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{})
+	svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -165,12 +165,12 @@ func TestSchedulerService_MonitorHungedTasks(t *testing.T) {
 func TestSchedulerService_MonitorDisabledTasks(t *testing.T) {
 	called := make(chan struct{}, 1)
 	repo := &mockSchedulerRepo{
-		switchToDisabledIfNeedFn: func(ctx context.Context) error {
+		switchToDisabledIfNeedFn: func(ctx context.Context) (int64, error) {
 			called <- struct{}{}
-			return nil
+			return 3, nil
 		},
 	}
-	svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{})
+	svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

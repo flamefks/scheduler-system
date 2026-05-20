@@ -9,6 +9,11 @@ database:
 nats:
   url: "nats://nats:4222"
 
+otel:
+  endpoint: "otel-collector:4317"
+  metrics:
+    enable: true
+
 background_tasks:
   hung_jobs_monitor:
     poll_interval: 5m

@@ -12,6 +12,11 @@ WHERE job_id= $1 AND kind = $2;
 UPDATE job_schedules
 SET
     status = sqlc.arg(status),
+    last_run_taken_at = CASE
+        WHEN sqlc.arg(status)::schedule_status IN ('fetching', 'delivering')
+            THEN NOW()
+        ELSE last_run_taken_at
+    END,
     done_runs = CASE
         WHEN sqlc.arg(status)::schedule_status IN ('idle', 'error')
             THEN done_runs + 1

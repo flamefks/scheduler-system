@@ -12,6 +12,7 @@ import (
 	"time"
 
 	coreConf "github.com/flamefks/scheduler-system/internal/api/config"
+	apimetrics "github.com/flamefks/scheduler-system/internal/api/metrics"
 	service "github.com/flamefks/scheduler-system/internal/api/service"
 	apiHttp "github.com/flamefks/scheduler-system/internal/api/transport/http"
 	"gopkg.in/yaml.v3"
@@ -21,6 +22,7 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 )
 
 func main() {
@@ -58,6 +60,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
 	if err != nil {
@@ -77,8 +87,15 @@ func main() {
 	queries := db.New(pool)
 
 	repo := dbRepo.NewRepository(pool, queries)
-	apiService := service.NewApiService(logger, repo)
-	apiHandler := apiHttp.NewApiHandler(apiService)
+	apiMetrics, err := apimetrics.NewApiMetrics()
+	if err != nil {
+		logger.Warn(
+			"api_metrics_init_failed",
+			slog.Any("error", err),
+		)
+	}
+	apiService := service.NewApiService(logger, repo, apiMetrics)
+	apiHandler := apiHttp.NewApiHandler(apiService, apiMetrics)
 	router := apiHttp.NewRouter(apiHandler)
 
 	srv := &http.Server{

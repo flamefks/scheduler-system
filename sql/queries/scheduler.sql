@@ -16,7 +16,7 @@ WITH picked AS (
 UPDATE job_schedules s
 SET
     status = 'scheduled',
-    last_run_at = NOW(),
+    last_scheduled_at = NOW(),
     next_run_at = CASE
         WHEN target_runs != 0 AND done_runs + 1 >= target_runs
             THEN NULL
@@ -29,17 +29,17 @@ FROM picked
 WHERE s.job_id = picked.job_id
 RETURNING s.job_id;
 
--- name: ResetHungMessage :exec
+-- name: ResetHungMessage :execrows
 UPDATE job_schedules
 SET
     status = 'idle',
     updated_at = NOW()
 WHERE (status IN ('fetching', 'delivering')
-  AND NOW() - last_run_at > (sqlc.arg(proc_timeout_seconds)::bigint * interval '1 second'))
+  AND NOW() - COALESCE(last_run_taken_at, last_scheduled_at) > (sqlc.arg(proc_timeout_seconds)::bigint * interval '1 second'))
 OR (status = 'scheduled'
-  AND NOW() - last_run_at > (sqlc.arg(schedule_timeout_seconds)::bigint * interval '1 second'));
+  AND NOW() - last_scheduled_at > (sqlc.arg(schedule_timeout_seconds)::bigint * interval '1 second'));
 
--- name: SwitchToDisabledIfNeed :exec
+-- name: SwitchToDisabledIfNeed :execrows
 UPDATE job_schedules
 SET
     status = 'disabled'

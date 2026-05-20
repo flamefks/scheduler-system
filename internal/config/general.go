@@ -38,5 +38,11 @@ type HttpRetryPolicySection struct {
 	MaxDelay      time.Duration `yaml:"max_delay" json:"max_delay"`
 	Backoff       string        `yaml:"back_off" json:"back_off"` // fixed | exponential
 	RetryOnStatus []int         `yaml:"retry_on_status" json:"retry_on_status"`
-	RetryOnError  bool          `yaml:"retry_on_error" json:"retry_on_error"`
+}
+
+type OtelSection struct {
+	Endpoint string `yaml:"endpoint" json:"endpoint"`
+	Metrics  struct {
+		Enable bool `yaml:"enable" json:"enable"`
+	} `yaml:"metrics" json:"metrics"`
 }

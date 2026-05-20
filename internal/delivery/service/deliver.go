@@ -9,6 +9,7 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/delivery/client"
 	coreConf "github.com/flamefks/scheduler-system/internal/delivery/config"
+	deliverymetrics "github.com/flamefks/scheduler-system/internal/delivery/metrics"
 	"github.com/flamefks/scheduler-system/internal/delivery/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -21,13 +22,15 @@ type DeliverService struct {
 	logger     *slog.Logger
 	httpClient client.Client
 	repo       repository.PostgresRepo
+	metrics    *deliverymetrics.DeliveryMetrics
 }
 
-func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo) *DeliverService {
+func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo, metrics *deliverymetrics.DeliveryMetrics) *DeliverService {
 	return &DeliverService{
 		logger:     logger,
 		httpClient: ClientHttp.NewHTTPClient(),
 		repo:       repo,
+		metrics:    metrics,
 	}
 }
 
@@ -41,7 +44,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return err, 0
+		return natsqueue.TermError, 0
 	}
 
 	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
@@ -56,7 +59,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 				slog.String("new_status", "delivering"),
 				slog.Any("err", err),
 			)
-			return err, 0
+			return natsqueue.NakError, 0
 		}
 	}
 	*needSetDbStatus = false
@@ -68,7 +71,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, 0
+		return natsqueue.NakError, 0
 	}
 	ds.logger.Info(
 		"success_get_config",
@@ -80,11 +83,11 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	if len(reqConfig.Headers) > 0 {
 		if err := json.Unmarshal(reqConfig.Headers, &headerMap); err != nil {
 			ds.logger.Error(
-				"failed_unmarshal_config_header",
+				"failed_unmarshal_headers",
 				slog.Any("job_id", jobId),
 				slog.Any("err", err),
 			)
-			return err, 0
+			return natsqueue.TermError, 0
 		}
 	}
 
@@ -107,46 +110,52 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
-		return err, statusCode
+		ds.metrics.RecordHTTPRequest(ctx, "error", statusCode)
+		return natsqueue.NakError, statusCode
 	}
+	ds.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	ds.logger.Info(
-		"success_sent_reponse",
+		"success_sent_response",
 		slog.String("job_id", strJobId),
 		slog.Any("data", &response),
 	)
 
 	err = ds.repo.SetJobStatus(ctx, "idle", jobId)
 	if err != nil {
-		return err, 0
+		return natsqueue.TermError, 0
 	}
+	ds.metrics.RecordDeliveryJobs(ctx, 1)
 	return nil, response.StatusCode
 }
 
-func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
+func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
+		ds.metrics.RecordErrorHandler(ctx, "error")
 		ds.logger.Error(
 			"invalid_job_id_header",
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return err
+		return
 	}
 
 	err = ds.repo.SetJobStatus(ctx, "error", jobId)
 	if err != nil {
+		ds.metrics.RecordErrorHandler(ctx, "error")
 		ds.logger.Error(
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
-		return err
+		return
 	}
+	ds.metrics.RecordErrorHandler(ctx, "success")
+	ds.metrics.RecordErrorHandlerJobs(ctx, 1)
 	ds.logger.Info(
 		"success_handle_error",
 		slog.String("job_id", strJobId),
 	)
-	return nil
 }
 
 func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) error {
@@ -173,7 +182,7 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 			slog.Any("error", err),
 		)
 
-		if (!config.RetryOnError && !isHttpError) || attempt == config.MaxAttempts-1 {
+		if attempt == config.MaxAttempts-1 {
 			if err == nil && isHttpError {
 				return fmt.Errorf("Http_status_code_error: %d", statusCode)
 			} else {

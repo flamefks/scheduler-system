@@ -14,8 +14,14 @@ func LoadCoreConfig(path string) (*CoreConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	cfg.Postgres = dbSection
+
+	otelSection, err := globalConf.ValidateOtelSection(&cfg.OtelSection)
+	if err != nil {
+		return nil, err
+	}
+	cfg.OtelSection = *otelSection
+
 	cfg, err = ValidateCore(cfg)
 	if err != nil {
 		return nil, err

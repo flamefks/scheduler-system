@@ -13,3 +13,8 @@ database:
   max_connection_lifetime: 1h
   min_connection_lifetime: 15m
   healthcheck_period: 1m
+
+otel:
+  endpoint: "otel-collector:4317"
+  metrics:
+    enable: true

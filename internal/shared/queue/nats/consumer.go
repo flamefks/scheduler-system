@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -11,9 +12,18 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+var (
+	NakError  = errors.New("nak error")
+	TermError = errors.New("term error")
+)
+
 type Consumer struct {
 	js      jetstream.JetStream
 	subject string
+}
+
+type AnswerRecorder interface {
+	RecordNatsAnswer(ctx context.Context, answer string)
 }
 
 func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
@@ -23,8 +33,26 @@ func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
 	}
 }
 
+func ackMsg(msg jetstream.Msg) {
+	if err := msg.Ack(); err != nil {
+		log.Printf("failed to ack message: %v", err)
+	}
+}
+
+func nakMsg(msg jetstream.Msg) {
+	if err := msg.Nak(); err != nil {
+		log.Printf("failed to nak message: %v", err)
+	}
+}
+
+func termMsg(msg jetstream.Msg) {
+	if err := msg.Term(); err != nil {
+		log.Printf("failed to term message: %v", err)
+	}
+}
+
 func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header) error,
-	errHandler func(context.Context, []byte, nats.Header) error, groupName string) error {
+	errHandler func(context.Context, []byte, nats.Header), groupName string, answerRecorder AnswerRecorder) error {
 
 	initCtx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 	defer cancel()
@@ -46,16 +74,21 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		binData := msg.Data()
 		header := msg.Headers()
 		err := handler(msgCtx, binData, header)
-		if err != nil {
-			errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
-			defer cancelErr()
-
-			if hErr := errHandler(errCtx, binData, header); hErr != nil {
-				return
+		if err == nil {
+			ackMsg(msg)
+			recordAnswer(msgCtx, answerRecorder, "ack")
+		} else {
+			if errors.Is(err, TermError) {
+				errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
+				defer cancelErr()
+				errHandler(errCtx, binData, header)
+				termMsg(msg)
+				recordAnswer(msgCtx, answerRecorder, "term")
+			} else {
+				nakMsg(msg)
+				recordAnswer(msgCtx, answerRecorder, "nak")
 			}
 		}
-
-		msg.Ack()
 	})
 
 	if err != nil {
@@ -65,4 +98,12 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 
 	<-appCtx.Done()
 	return nil
+}
+
+func recordAnswer(ctx context.Context, recorder AnswerRecorder, answer string) {
+	if recorder == nil {
+		return
+	}
+
+	recorder.RecordNatsAnswer(ctx, answer)
 }

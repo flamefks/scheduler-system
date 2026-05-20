@@ -15,7 +15,6 @@ func NewRouter(h *ApiHandler) http.Handler {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
-		// r.Get("/metrics")
 		r.Post("/jobs", h.CreateJob)
 		r.Get("/jobs/{id}", h.GetJob)
 		r.Patch("/jobs/{id}", h.UpdateJob)

@@ -14,8 +14,10 @@ import (
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
 	coreConf "github.com/flamefks/scheduler-system/internal/scheduler/config"
+	schedulermetrics "github.com/flamefks/scheduler-system/internal/scheduler/metrics"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -57,6 +59,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -84,7 +94,14 @@ func main() {
 	//logic
 	publisher := qnats.NewPublisher(js)
 	repository := repo.NewSchedulerRepository(pool, queries)
-	schedulerService := service.NewSchedulerService(logger, repository, publisher)
+	schedulerMetrics, err := schedulermetrics.NewSchedulerMetrics()
+	if err != nil {
+		logger.Warn(
+			"scheduler_metrics_init_failed",
+			slog.Any("error", err),
+		)
+	}
+	schedulerService := service.NewSchedulerService(logger, repository, publisher, schedulerMetrics)
 
 	// Bacground checkers
 	go schedulerService.MonitorHungedTasks(appCtx, coreCfg.Tasks.HungJobsMonitor.ScheduleTimeoutSeconds,

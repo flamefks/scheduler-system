@@ -1,6 +1,11 @@
 nats:
   url: "nats://nats:4222"
 
+otel:
+  endpoint: "otel-collector:4317"
+  metrics:
+    enable: true
+
 database:
   url: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
   max_connections: 10
