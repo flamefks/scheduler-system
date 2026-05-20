@@ -51,7 +51,7 @@ func testLogger() *slog.Logger {
 
 func TestNewApiService(t *testing.T) {
 	repo := &mockRepo{}
-	svc := NewApiService(testLogger(), repo)
+	svc := NewApiService(testLogger(), repo, nil)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -78,7 +78,7 @@ func TestApiService_CreateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		gotID, err := svc.CreateJob(context.Background(), job)
 		if err != nil {
@@ -97,7 +97,7 @@ func TestApiService_CreateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		gotID, err := svc.CreateJob(context.Background(), job)
 		if err == nil {
@@ -125,7 +125,7 @@ func TestApiService_DeleteJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		if err := svc.DeleteJob(context.Background(), jobID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -140,7 +140,7 @@ func TestApiService_DeleteJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		err := svc.DeleteJob(context.Background(), jobID)
 		if err == nil {
@@ -166,7 +166,7 @@ func TestApiService_GetJobByID(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		got, err := svc.GetJobByID(context.Background(), jobID)
 		if err != nil {
@@ -185,7 +185,7 @@ func TestApiService_GetJobByID(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		got, err := svc.GetJobByID(context.Background(), jobID)
 		if err == nil {
@@ -217,7 +217,7 @@ func TestApiService_PatchJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		if err := svc.PatchJob(context.Background(), patch, jobID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -232,7 +232,7 @@ func TestApiService_PatchJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		err := svc.PatchJob(context.Background(), patch, jobID)
 		if err == nil {
@@ -257,7 +257,7 @@ func TestApiService_ActivateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		if err := svc.ActivateJob(context.Background(), jobID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -272,7 +272,7 @@ func TestApiService_ActivateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		err := svc.ActivateJob(context.Background(), jobID)
 		if err == nil {
@@ -297,7 +297,7 @@ func TestApiService_DeactivateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		if err := svc.DeactivateJob(context.Background(), jobID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -312,7 +312,7 @@ func TestApiService_DeactivateJob(t *testing.T) {
 			},
 		}
 
-		svc := NewApiService(testLogger(), repo)
+		svc := NewApiService(testLogger(), repo, nil)
 
 		err := svc.DeactivateJob(context.Background(), jobID)
 		if err == nil {

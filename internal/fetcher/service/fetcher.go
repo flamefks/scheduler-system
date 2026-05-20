@@ -9,6 +9,7 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/fetcher/client"
 	coreConf "github.com/flamefks/scheduler-system/internal/fetcher/config"
+	fetchermetrics "github.com/flamefks/scheduler-system/internal/fetcher/metrics"
 	"github.com/flamefks/scheduler-system/internal/fetcher/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -23,14 +24,16 @@ type FetcherService struct {
 	httpClient client.Client
 	publisher  natsqueue.AbstractPublisher
 	repo       repository.PostgresRepo
+	metrics    *fetchermetrics.FetcherMetrics
 }
 
-func NewFetcherService(logger *slog.Logger, publisher natsqueue.AbstractPublisher, repo repository.PostgresRepo) *FetcherService {
+func NewFetcherService(logger *slog.Logger, publisher natsqueue.AbstractPublisher, repo repository.PostgresRepo, metrics *fetchermetrics.FetcherMetrics) *FetcherService {
 	return &FetcherService{
 		logger:     logger,
 		httpClient: ClientHttp.NewHTTPClient(),
 		publisher:  publisher,
 		repo:       repo,
+		metrics:    metrics,
 	}
 }
 
@@ -110,8 +113,10 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
+		f.metrics.RecordHTTPRequest(ctx, "error", statusCode)
 		return natsqueue.NakError, statusCode
 	}
+	f.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	f.logger.Info(
 		"response",
 		slog.String("job_id", strJobId),
@@ -136,6 +141,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 	})
 
 	if err != nil {
+		f.metrics.RecordNatsPublish(ctx, "error")
 		f.logger.Error(
 			"failed_publish_data",
 			slog.Any("job_id", jobId),
@@ -143,6 +149,8 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return natsqueue.NakError, 0
 	}
+	f.metrics.RecordNatsPublish(ctx, "success")
+	f.metrics.RecordNatsPublishJobs(ctx, 1)
 	return nil, response.StatusCode
 }
 
@@ -150,6 +158,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
+		f.metrics.RecordErrorHandler(ctx, "error")
 		f.logger.Error(
 			"invalid_job_id_header",
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
@@ -161,12 +170,15 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 	err = f.repo.SetJobStatus(ctx, "error", jobId)
 
 	if err != nil {
+		f.metrics.RecordErrorHandler(ctx, "error")
 		f.logger.Error(
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
 		return
 	}
+	f.metrics.RecordErrorHandler(ctx, "success")
+	f.metrics.RecordErrorHandlerJobs(ctx, 1)
 	f.logger.Info(
 		"success_handle_error",
 		slog.String("job_id", strJobId),

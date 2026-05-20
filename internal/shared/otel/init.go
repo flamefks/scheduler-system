@@ -56,7 +56,7 @@ func Init(ctx context.Context, serviceName, serviceVersion, otlpEndpoint string)
 			metric.WithInterval(10*time.Second),
 		)),
 		metric.WithView(metric.NewView(
-			metric.Instrument{Name: "http_request_duration_seconds"},
+			metric.Instrument{Name: "http_api_duration_seconds"},
 			metric.Stream{
 				Aggregation: metric.AggregationExplicitBucketHistogram{
 					Boundaries: []float64{

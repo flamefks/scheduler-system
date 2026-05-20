@@ -52,7 +52,7 @@ func deliverHeaderWithJobID(jobID uuid.UUID) nats.Header {
 func TestNewDeliverService(t *testing.T) {
 	repo := &mockDeliverRepo{}
 
-	svc := NewDeliverService(deliverTestLogger(), repo)
+	svc := NewDeliverService(deliverTestLogger(), repo, nil)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -96,7 +96,7 @@ func TestDeliverService_Handle(t *testing.T) {
 			},
 		}
 
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 		svc.httpClient = &mockDeliverHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if req.Method != http.MethodPut {
@@ -126,7 +126,7 @@ func TestDeliverService_Handle(t *testing.T) {
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{})
+		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{}, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, nats.Header{}, &needSetDbStatus)
@@ -145,7 +145,7 @@ func TestDeliverService_Handle(t *testing.T) {
 				return nil, repoErr
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
@@ -163,7 +163,7 @@ func TestDeliverService_Handle(t *testing.T) {
 				return &data.IOConfig{Headers: json.RawMessage(`{bad}`)}, nil
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus)
@@ -188,7 +188,7 @@ func TestDeliverService_Handle(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 		svc.httpClient = &mockDeliverHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if len(req.Headers) != 0 {
@@ -218,7 +218,7 @@ func TestDeliverService_Handle(t *testing.T) {
 				}, nil
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 		httpErr := errors.New("temporary failure")
 		svc.httpClient = &mockDeliverHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
@@ -250,7 +250,7 @@ func TestDeliverService_Handle(t *testing.T) {
 				return statusErr
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 		svc.httpClient = &mockDeliverHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				return &data.ExternalResponse{StatusCode: http.StatusOK}, nil
@@ -283,13 +283,13 @@ func TestDeliverService_HandleError(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 
 		svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID))
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{})
+		svc := NewDeliverService(deliverTestLogger(), &mockDeliverRepo{}, nil)
 
 		svc.HandleError(context.Background(), nil, nats.Header{})
 	})
@@ -302,7 +302,7 @@ func TestDeliverService_HandleError(t *testing.T) {
 				return errors.New("set status failed")
 			},
 		}
-		svc := NewDeliverService(deliverTestLogger(), repo)
+		svc := NewDeliverService(deliverTestLogger(), repo, nil)
 
 		svc.HandleError(context.Background(), nil, deliverHeaderWithJobID(jobID))
 		if !called {

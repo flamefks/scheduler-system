@@ -22,6 +22,10 @@ type Consumer struct {
 	subject string
 }
 
+type AnswerRecorder interface {
+	RecordNatsAnswer(ctx context.Context, answer string)
+}
+
 func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
 	return &Consumer{
 		js:      js,
@@ -48,7 +52,7 @@ func termMsg(msg jetstream.Msg) {
 }
 
 func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header) error,
-	errHandler func(context.Context, []byte, nats.Header), groupName string) error {
+	errHandler func(context.Context, []byte, nats.Header), groupName string, answerRecorder AnswerRecorder) error {
 
 	initCtx, cancel := context.WithTimeout(appCtx, 5*time.Second)
 	defer cancel()
@@ -72,14 +76,17 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		err := handler(msgCtx, binData, header)
 		if err == nil {
 			ackMsg(msg)
+			recordAnswer(msgCtx, answerRecorder, "ack")
 		} else {
 			if errors.Is(err, TermError) {
 				errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
 				defer cancelErr()
 				errHandler(errCtx, binData, header)
 				termMsg(msg)
+				recordAnswer(msgCtx, answerRecorder, "term")
 			} else {
 				nakMsg(msg)
+				recordAnswer(msgCtx, answerRecorder, "nak")
 			}
 		}
 	})
@@ -91,4 +98,12 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 
 	<-appCtx.Done()
 	return nil
+}
+
+func recordAnswer(ctx context.Context, recorder AnswerRecorder, answer string) {
+	if recorder == nil {
+		return
+	}
+
+	recorder.RecordNatsAnswer(ctx, answer)
 }

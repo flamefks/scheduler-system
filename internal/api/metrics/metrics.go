@@ -21,26 +21,34 @@ const (
 type ApiMetrics struct {
 	httpTotal    metric.Int64Counter
 	httpDuration metric.Float64Histogram
+
+	dbOperationTotal metric.Int64Counter
 }
 
 func NewApiMetrics() (*ApiMetrics, error) {
 	meter := otel.Meter("scheduler-system/api")
 
-	httpTotal, err := meter.Int64Counter("http_responses_total")
+	httpTotal, err := meter.Int64Counter("http_api_responses_total")
 	if err != nil {
 		return nil, err
 	}
 	httpDuration, err := meter.Float64Histogram(
-		"http_request_duration_seconds",
+		"http_api_duration_seconds",
 		metric.WithUnit("s"),
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	dbOperationTotal, err := meter.Int64Counter("api_db_operations_total")
+	if err != nil {
+		return nil, err
+	}
+
 	return &ApiMetrics{
-		httpTotal:    httpTotal,
-		httpDuration: httpDuration,
+		httpTotal:        httpTotal,
+		httpDuration:     httpDuration,
+		dbOperationTotal: dbOperationTotal,
 	}, nil
 }
 
@@ -56,4 +64,15 @@ func (m *ApiMetrics) RecordHTTP(ctx context.Context, handler string, statusCode 
 
 	m.httpTotal.Add(ctx, 1, attrs)
 	m.httpDuration.Record(ctx, duration.Seconds(), attrs)
+}
+
+func (m *ApiMetrics) RecordDBOperation(ctx context.Context, operation string, status string) {
+	if m == nil {
+		return
+	}
+
+	m.dbOperationTotal.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("operation", operation),
+		attribute.String("status", status),
+	))
 }

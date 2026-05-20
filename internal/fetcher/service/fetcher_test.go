@@ -61,7 +61,7 @@ func TestNewFetcherService(t *testing.T) {
 	repo := &mockFetcherRepo{}
 	publisher := &mockFetcherPublisher{}
 
-	svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+	svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -116,7 +116,7 @@ func TestFetcherService_Handle(t *testing.T) {
 			},
 		}
 
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if req.Method != http.MethodPost {
@@ -149,7 +149,7 @@ func TestFetcherService_Handle(t *testing.T) {
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{})
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{}, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, nats.Header{}, &needSetDbStatus)
@@ -168,7 +168,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return nil, repoErr
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
@@ -186,7 +186,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return &data.IOConfig{Headers: json.RawMessage(`{bad}`)}, nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), nil, headerWithJobID(jobID), &needSetDbStatus)
@@ -213,7 +213,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				if len(req.Headers) != 0 {
@@ -243,7 +243,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				}, nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 		httpErr := errors.New("temporary failure")
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
@@ -277,7 +277,7 @@ func TestFetcherService_Handle(t *testing.T) {
 				return publishErr
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), publisher, repo)
+		svc := NewFetcherService(fetcherTestLogger(), publisher, repo, nil)
 		svc.httpClient = &mockFetcherHTTPClient{
 			doFn: func(ctx context.Context, req *data.Request) (*data.ExternalResponse, error) {
 				return &data.ExternalResponse{StatusCode: http.StatusOK}, nil
@@ -310,13 +310,13 @@ func TestFetcherService_ErrorHandler(t *testing.T) {
 				return nil
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID))
 	})
 
 	t.Run("invalid job id header", func(t *testing.T) {
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{})
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, &mockFetcherRepo{}, nil)
 
 		svc.ErrorHandler(context.Background(), nil, nats.Header{})
 	})
@@ -329,7 +329,7 @@ func TestFetcherService_ErrorHandler(t *testing.T) {
 				return errors.New("set status failed")
 			},
 		}
-		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo)
+		svc := NewFetcherService(fetcherTestLogger(), &mockFetcherPublisher{}, repo, nil)
 
 		svc.ErrorHandler(context.Background(), nil, headerWithJobID(jobID))
 		if !called {

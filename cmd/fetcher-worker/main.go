@@ -10,11 +10,13 @@ import (
 
 	generalConf "github.com/flamefks/scheduler-system/internal/config"
 	coreConf "github.com/flamefks/scheduler-system/internal/fetcher/config"
+	fetchermetrics "github.com/flamefks/scheduler-system/internal/fetcher/metrics"
 	"github.com/flamefks/scheduler-system/internal/fetcher/service"
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
 	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	sharedRepo "github.com/flamefks/scheduler-system/internal/shared/repository"
 	"github.com/nats-io/nats.go"
@@ -60,6 +62,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -101,10 +111,18 @@ func main() {
 	// service initialization
 	publisher := qnats.NewPublisher(js)
 	repository := sharedRepo.NewWorkerRepository(queries)
+	fetcherMetrics, err := fetchermetrics.NewFetcherMetrics()
+	if err != nil {
+		logger.Warn(
+			"fetcher_metrics_init_failed",
+			slog.Any("error", err),
+		)
+	}
 	fetcherService := service.NewFetcherService(
 		logger,
 		publisher,
 		repository,
+		fetcherMetrics,
 	)
 
 	// consumer
@@ -113,7 +131,7 @@ func main() {
 	logger.Info("service_started")
 
 	if err := consumer.Consume(appCtx, fetcherService.PipelineHandler, fetcherService.ErrorHandler,
-		sharedData.FetcherGroup); err != nil {
+		sharedData.FetcherGroup, fetcherMetrics); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/flamefks/scheduler-system/internal/delivery/client"
 	coreConf "github.com/flamefks/scheduler-system/internal/delivery/config"
+	deliverymetrics "github.com/flamefks/scheduler-system/internal/delivery/metrics"
 	"github.com/flamefks/scheduler-system/internal/delivery/repository"
 	ClientHttp "github.com/flamefks/scheduler-system/internal/shared/client/http"
 	"github.com/flamefks/scheduler-system/internal/shared/data"
@@ -21,13 +22,15 @@ type DeliverService struct {
 	logger     *slog.Logger
 	httpClient client.Client
 	repo       repository.PostgresRepo
+	metrics    *deliverymetrics.DeliveryMetrics
 }
 
-func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo) *DeliverService {
+func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo, metrics *deliverymetrics.DeliveryMetrics) *DeliverService {
 	return &DeliverService{
 		logger:     logger,
 		httpClient: ClientHttp.NewHTTPClient(),
 		repo:       repo,
+		metrics:    metrics,
 	}
 }
 
@@ -107,8 +110,10 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 			slog.Any("job_id", jobId),
 			slog.Any("err", err),
 		)
+		ds.metrics.RecordHTTPRequest(ctx, "error", statusCode)
 		return natsqueue.NakError, statusCode
 	}
+	ds.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	ds.logger.Info(
 		"success_sent_response",
 		slog.String("job_id", strJobId),
@@ -119,6 +124,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	if err != nil {
 		return natsqueue.TermError, 0
 	}
+	ds.metrics.RecordDeliveryJobs(ctx, 1)
 	return nil, response.StatusCode
 }
 
@@ -126,6 +132,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
+		ds.metrics.RecordErrorHandler(ctx, "error")
 		ds.logger.Error(
 			"invalid_job_id_header",
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
@@ -136,12 +143,15 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 
 	err = ds.repo.SetJobStatus(ctx, "error", jobId)
 	if err != nil {
+		ds.metrics.RecordErrorHandler(ctx, "error")
 		ds.logger.Error(
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
 		return
 	}
+	ds.metrics.RecordErrorHandler(ctx, "success")
+	ds.metrics.RecordErrorHandlerJobs(ctx, 1)
 	ds.logger.Info(
 		"success_handle_error",
 		slog.String("job_id", strJobId),

@@ -22,6 +22,7 @@ import (
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 )
 
 func main() {
@@ -59,6 +60,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
 	if err != nil {
@@ -78,7 +87,6 @@ func main() {
 	queries := db.New(pool)
 
 	repo := dbRepo.NewRepository(pool, queries)
-	apiService := service.NewApiService(logger, repo)
 	apiMetrics, err := apimetrics.NewApiMetrics()
 	if err != nil {
 		logger.Warn(
@@ -86,6 +94,7 @@ func main() {
 			slog.Any("error", err),
 		)
 	}
+	apiService := service.NewApiService(logger, repo, apiMetrics)
 	apiHandler := apiHttp.NewApiHandler(apiService, apiMetrics)
 	router := apiHttp.NewRouter(apiHandler)
 

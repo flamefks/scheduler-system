@@ -57,7 +57,7 @@ func handlerLogger() *slog.Logger {
 }
 
 func newHandler(repo *mockRepo) *ApiHandler {
-	svc := apiservice.NewApiService(handlerLogger(), repo)
+	svc := apiservice.NewApiService(handlerLogger(), repo, nil)
 	return NewApiHandler(svc, nil)
 }
 

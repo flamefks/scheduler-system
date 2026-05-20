@@ -17,6 +17,7 @@ import (
 	schedulermetrics "github.com/flamefks/scheduler-system/internal/scheduler/metrics"
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -58,6 +59,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)

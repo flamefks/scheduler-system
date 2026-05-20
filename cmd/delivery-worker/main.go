@@ -10,11 +10,13 @@ import (
 
 	generalConf "github.com/flamefks/scheduler-system/internal/config"
 	coreConf "github.com/flamefks/scheduler-system/internal/delivery/config"
+	deliverymetrics "github.com/flamefks/scheduler-system/internal/delivery/metrics"
 	"github.com/flamefks/scheduler-system/internal/delivery/service"
 	logging "github.com/flamefks/scheduler-system/internal/logger"
 	"github.com/flamefks/scheduler-system/internal/postgres"
 	db "github.com/flamefks/scheduler-system/internal/postgres/queries"
 	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
+	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	sharedRepo "github.com/flamefks/scheduler-system/internal/shared/repository"
 	"github.com/nats-io/nats.go"
@@ -60,6 +62,14 @@ func main() {
 		"core_config_successfully_parsed",
 		slog.String("config", string(b)),
 	)
+	otelShutdown := sharedotel.InitOrWarn(
+		appCtx,
+		logger,
+		coreCfg.Service.ServiceName,
+		coreCfg.Service.Version,
+		coreCfg.OtelSection.Endpoint,
+	)
+	defer sharedotel.ShutdownOrWarn(otelShutdown, logger)
 
 	// Database
 	pool, err := postgres.NewPool(appCtx, coreCfg.Postgres)
@@ -100,9 +110,17 @@ func main() {
 
 	// service initialization
 	repository := sharedRepo.NewWorkerRepository(queries)
+	deliveryMetrics, err := deliverymetrics.NewDeliveryMetrics()
+	if err != nil {
+		logger.Warn(
+			"delivery_metrics_init_failed",
+			slog.Any("error", err),
+		)
+	}
 	schedulerService := service.NewDeliverService(
 		logger,
 		repository,
+		deliveryMetrics,
 	)
 
 	// consumer
@@ -111,7 +129,7 @@ func main() {
 	logger.Info("service_started")
 
 	if err := consumer.Consume(appCtx, schedulerService.PipelineHandler, schedulerService.HandleError,
-		sharedData.DeliverGroup); err != nil {
+		sharedData.DeliverGroup, deliveryMetrics); err != nil {
 		logger.Error("consumer_stopped_with_error", slog.Any("err", err))
 		os.Exit(1)
 	}
