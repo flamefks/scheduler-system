@@ -52,13 +52,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	b, err = yaml.Marshal(coreCfg)
-	if err != nil {
-		log.Fatal(err)
-	}
 	logger.Info(
 		"core_config_successfully_parsed",
-		slog.String("config", string(b)),
+		slog.String("config", generalConf.RedactConfigYAML(coreCfg)),
 	)
 	otelShutdown := sharedotel.InitOrWarn(
 		appCtx,

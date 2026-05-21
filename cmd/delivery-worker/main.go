@@ -54,13 +54,9 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	b, err = yaml.Marshal(coreCfg)
-	if err != nil {
-		log.Fatal(err)
-	}
 	logger.Info(
 		"core_config_successfully_parsed",
-		slog.String("config", string(b)),
+		slog.String("config", generalConf.RedactConfigYAML(coreCfg)),
 	)
 	otelShutdown := sharedotel.InitOrWarn(
 		appCtx,
@@ -83,7 +79,7 @@ func main() {
 	defer pool.Close()
 	logger.Info("postgres_connection",
 		slog.String("status", "success"),
-		slog.String("url", coreCfg.Postgres.DSN),
+		slog.String("url", generalConf.SafeDSN(coreCfg.Postgres.DSN)),
 	)
 
 	queries := db.New(pool)
@@ -105,7 +101,7 @@ func main() {
 
 	logger.Info("nats_connection",
 		slog.String("status", "success"),
-		slog.String("url", coreCfg.Nats.Url),
+		slog.String("url", generalConf.SafeDSN(coreCfg.Nats.Url)),
 	)
 
 	// service initialization

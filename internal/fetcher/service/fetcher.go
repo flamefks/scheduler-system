@@ -79,7 +79,6 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 	f.logger.Info(
 		"success_get_config",
 		slog.String("job_id", strJobId),
-		slog.Any("config", &reqConfig),
 	)
 
 	headerMap := map[string]string{}
@@ -128,8 +127,6 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 			f.logger.Error(
 				"failed_validate_schema",
 				slog.Any("job_id", jobId),
-				slog.Any("schema", reqConfig.JsonSchema),
-				slog.Any("response", response.Body),
 				slog.Any("err", err),
 			)
 			return natsqueue.TermError, 0

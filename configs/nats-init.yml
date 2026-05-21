@@ -1,5 +1,5 @@
 nats:
-  url: "nats://nats:4222"
+  url: "${NATS_URL}"
 
 jetstream:
   stream:

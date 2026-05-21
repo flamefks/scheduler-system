@@ -76,7 +76,6 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	ds.logger.Info(
 		"success_get_config",
 		slog.String("job_id", strJobId),
-		slog.Any("config", &reqConfig),
 	)
 
 	headerMap := map[string]string{}

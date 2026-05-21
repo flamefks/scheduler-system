@@ -14,8 +14,10 @@ func LoadYAML[T any](path string) (*T, error) {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
+	expanded := os.ExpandEnv(string(data))
+
 	var cfg T
-	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(expanded)))
 	dec.KnownFields(true)
 
 	if err := dec.Decode(&cfg); err != nil {

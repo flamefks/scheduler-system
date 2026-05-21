@@ -1,13 +1,13 @@
 nats:
-  url: "nats://nats:4222"
+  url: "${NATS_URL}"
 
 otel:
-  endpoint: "otel-collector:4317"
+  endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
   metrics:
     enable: true
 
 database:
-  url: "postgres://scheduler:scheduler@postgres:5432/scheduler_db?sslmode=disable"
+  url: "${DATABASE_URL}"
   max_connections: 10
   min_connections: 2
   max_connection_lifetime: 1h
