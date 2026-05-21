@@ -23,7 +23,7 @@ type Consumer struct {
 }
 
 type AnswerRecorder interface {
-	RecordNatsAnswer(ctx context.Context, answer string)
+	RecordNatsAnswer(ctx context.Context, answerType string, status string)
 }
 
 func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
@@ -33,22 +33,28 @@ func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
 	}
 }
 
-func ackMsg(msg jetstream.Msg) {
+func ackMsg(msg jetstream.Msg) error {
 	if err := msg.Ack(); err != nil {
 		log.Printf("failed to ack message: %v", err)
+		return err
 	}
+	return nil
 }
 
-func nakMsg(msg jetstream.Msg) {
+func nakMsg(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
 		log.Printf("failed to nak message: %v", err)
+		return err
 	}
+	return nil
 }
 
-func termMsg(msg jetstream.Msg) {
+func termMsg(msg jetstream.Msg) error {
 	if err := msg.Term(); err != nil {
 		log.Printf("failed to term message: %v", err)
+		return err
 	}
+	return nil
 }
 
 func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header) error,
@@ -75,18 +81,15 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		header := msg.Headers()
 		err := handler(msgCtx, binData, header)
 		if err == nil {
-			ackMsg(msg)
-			recordAnswer(msgCtx, answerRecorder, "ack")
+			recordAnswer(msgCtx, answerRecorder, "ack", ackMsg(msg))
 		} else {
 			if errors.Is(err, TermError) {
 				errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
 				defer cancelErr()
 				errHandler(errCtx, binData, header)
-				termMsg(msg)
-				recordAnswer(msgCtx, answerRecorder, "term")
+				recordAnswer(msgCtx, answerRecorder, "term", termMsg(msg))
 			} else {
-				nakMsg(msg)
-				recordAnswer(msgCtx, answerRecorder, "nak")
+				recordAnswer(msgCtx, answerRecorder, "nak", nakMsg(msg))
 			}
 		}
 	})
@@ -100,10 +103,14 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 	return nil
 }
 
-func recordAnswer(ctx context.Context, recorder AnswerRecorder, answer string) {
+func recordAnswer(ctx context.Context, recorder AnswerRecorder, answerType string, err error) {
 	if recorder == nil {
 		return
 	}
 
-	recorder.RecordNatsAnswer(ctx, answer)
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	recorder.RecordNatsAnswer(ctx, answerType, status)
 }

@@ -20,4 +20,3 @@ http_retry:
   max_delay: 2m 
   back_off: exponential
   retry_on_status: [408, 429, 500, 502, 503, 504]
-  retry_on_error: true 

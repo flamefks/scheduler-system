@@ -67,6 +67,40 @@ services:
       - ../configs/nats-init.yml:/app/config/core.yml:ro
     restart: "no"
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.101.0
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./otel-collector.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "4317:4317"
+      - "9464:9464"
+    depends_on:
+      jaeger:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - scheduler_prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+
   api:
     <<: *app-env
     build:
@@ -78,6 +112,8 @@ services:
         condition: service_completed_successfully
       nats-init:
         condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     ports:
       - "8080:8080"
     volumes:
@@ -85,60 +121,7 @@ services:
       - ../configs/logging.yml:/app/config/logging.yml:ro
       - ../logs/api:/app/logs
 
-  scheduler:
-    <<: *app-env
-    build:
-      <<: *app-build
-      args:
-        CMD_PATH: ./cmd/scheduler
-    depends_on:
-      postgres-migrate:
-        condition: service_completed_successfully
-      nats-init:
-        condition: service_completed_successfully
-      api:
-        condition: service_started
-    volumes:
-      - ../configs/scheduler.yml:/app/config/core.yml:ro
-      - ../configs/logging.yml:/app/config/logging.yml:ro
-      - ../logs/scheduler:/app/logs
-
-  fetcher-worker:
-    <<: *app-env
-    build:
-      <<: *app-build
-      args:
-        CMD_PATH: ./cmd/fetcher-worker
-    depends_on:
-      postgres-migrate:
-        condition: service_completed_successfully
-      nats-init:
-        condition: service_completed_successfully
-      scheduler:
-        condition: service_started
-    volumes:
-      - ../configs/fetcher.yml:/app/config/core.yml:ro
-      - ../configs/logging.yml:/app/config/logging.yml:ro
-      - ../logs/fetcher:/app/logs
-
-  delivery-worker:
-    <<: *app-env
-    build:
-      <<: *app-build
-      args:
-        CMD_PATH: ./cmd/delivery-worker
-    depends_on:
-      postgres-migrate:
-        condition: service_completed_successfully
-      nats-init:
-        condition: service_completed_successfully
-      scheduler:
-        condition: service_started
-    volumes:
-      - ../configs/deliver.yml:/app/config/core.yml:ro
-      - ../configs/logging.yml:/app/config/logging.yml:ro
-      - ../logs/delivery:/app/logs
-
 volumes:
   scheduler_pg_data:
   scheduler_nats_data:
+  scheduler_prometheus_data:

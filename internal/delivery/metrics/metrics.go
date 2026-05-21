@@ -59,13 +59,14 @@ func NewDeliveryMetrics() (*DeliveryMetrics, error) {
 	}, nil
 }
 
-func (m *DeliveryMetrics) RecordNatsAnswer(ctx context.Context, answer string) {
+func (m *DeliveryMetrics) RecordNatsAnswer(ctx context.Context, answerType string, status string) {
 	if m == nil {
 		return
 	}
 
 	m.natsAnswersTotal.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("answer", answer),
+		attribute.String("type", answerType),
+		attribute.String("status", status),
 	))
 }
 
