@@ -37,7 +37,7 @@ func NewFetcherService(logger *slog.Logger, publisher natsqueue.AbstractPublishe
 	}
 }
 
-func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsHeader nats.Header, needSetDbStatus *bool) (error, int) {
+func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsHeader nats.Header, needSetDbStatus *bool, retryOnStatus []int) (error, int) {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -115,6 +115,17 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		f.metrics.RecordHTTPRequest(ctx, "error", statusCode)
 		return natsqueue.NakError, statusCode
 	}
+	isRetryableStatus := utils.InSlice(retryOnStatus, response.StatusCode)
+	if isRetryableStatus {
+		f.metrics.RecordHTTPRequest(ctx, "error", response.StatusCode)
+		f.logger.Warn(
+			"retryable_http_status",
+			slog.Any("job_id", jobId),
+			slog.Int("http_status_code", response.StatusCode),
+		)
+		return natsqueue.NakError, response.StatusCode
+	}
+
 	f.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	f.logger.Info(
 		"response",
@@ -182,7 +193,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 	)
 }
 
-func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header) error {
+func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header, deliveryAttempt uint64) error {
 	config := coreConf.GetCoreConfig().HttpRetry
 	needNotifyDb := true
 	delay := config.BaseDelay
@@ -193,7 +204,7 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 		default:
 		}
 
-		err, statusCode := f.Handle(parentCtx, binData, natsHeader, &needNotifyDb)
+		err, statusCode := f.Handle(parentCtx, binData, natsHeader, &needNotifyDb, config.RetryOnStatus)
 		isHttpError := utils.InSlice(config.RetryOnStatus, statusCode)
 		if !isHttpError {
 			return err
@@ -201,6 +212,7 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 
 		f.logger.Warn(
 			"pipeline_handler_failed",
+			slog.Uint64("delivery_attempt", deliveryAttempt),
 			slog.Int("attempt", attempt),
 			slog.Int("http_status_code", statusCode),
 			slog.Any("error", err),

@@ -57,7 +57,7 @@ func termMsg(msg jetstream.Msg) error {
 	return nil
 }
 
-func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header) error,
+func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context, []byte, nats.Header, uint64) error,
 	errHandler func(context.Context, []byte, nats.Header), groupName string, answerRecorder AnswerRecorder) error {
 
 	initCtx, cancel := context.WithTimeout(appCtx, 5*time.Second)
@@ -79,7 +79,8 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 
 		binData := msg.Data()
 		header := msg.Headers()
-		err := handler(msgCtx, binData, header)
+		deliveryAttempt := deliveryAttemptFromMetadata(msg)
+		err := handler(msgCtx, binData, header, deliveryAttempt)
 		if err == nil {
 			recordAnswer(msgCtx, answerRecorder, "ack", ackMsg(msg))
 		} else {
@@ -101,6 +102,15 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 
 	<-appCtx.Done()
 	return nil
+}
+
+func deliveryAttemptFromMetadata(msg jetstream.Msg) uint64 {
+	metadata, err := msg.Metadata()
+	if err != nil {
+		log.Printf("failed to read message metadata: %v", err)
+		return 0
+	}
+	return metadata.NumDelivered
 }
 
 func recordAnswer(ctx context.Context, recorder AnswerRecorder, answerType string, err error) {

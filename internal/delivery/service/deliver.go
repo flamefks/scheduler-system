@@ -34,7 +34,7 @@ func NewDeliverService(logger *slog.Logger, repo repository.PostgresRepo, metric
 	}
 }
 
-func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header, needSetDbStatus *bool) (error, int) {
+func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header, needSetDbStatus *bool, retryOnStatus []int) (error, int) {
 
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
@@ -112,6 +112,17 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 		ds.metrics.RecordHTTPRequest(ctx, "error", statusCode)
 		return natsqueue.NakError, statusCode
 	}
+	isRetryableStatus := utils.InSlice(retryOnStatus, response.StatusCode)
+	if isRetryableStatus {
+		ds.metrics.RecordHTTPRequest(ctx, "error", response.StatusCode)
+		ds.logger.Warn(
+			"retryable_http_status",
+			slog.Any("job_id", jobId),
+			slog.Int("http_status_code", response.StatusCode),
+		)
+		return natsqueue.NakError, response.StatusCode
+	}
+
 	ds.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	ds.logger.Info(
 		"success_sent_response",
@@ -157,7 +168,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 	)
 }
 
-func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header) error {
+func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header, deliveryAttempt uint64) error {
 	config := coreConf.GetCoreConfig().HttpRetry
 	needNotifyDb := true
 	delay := config.BaseDelay
@@ -168,7 +179,7 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 		default:
 		}
 
-		err, statusCode := ds.Handle(parentCtx, binNatsMsg, natsHeader, &needNotifyDb)
+		err, statusCode := ds.Handle(parentCtx, binNatsMsg, natsHeader, &needNotifyDb, config.RetryOnStatus)
 		isHttpError := utils.InSlice(config.RetryOnStatus, statusCode)
 		if err == nil && !isHttpError {
 			return nil
@@ -176,6 +187,7 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 
 		ds.logger.Warn(
 			"pipeline_handler_failed",
+			slog.Uint64("delivery_attempt", deliveryAttempt),
 			slog.Int("attempt", attempt),
 			slog.Int("http_status_code", statusCode),
 			slog.Any("error", err),
