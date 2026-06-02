@@ -17,18 +17,18 @@ import (
 
 type mockDeliverRepo struct {
 	getConfigFn    func(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error)
-	setJobStatusFn func(ctx context.Context, status string, jobId uuid.UUID) error
+	setJobStatusFn func(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error
 }
 
 func (m *mockDeliverRepo) GetConfig(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error) {
 	return m.getConfigFn(ctx, kind, jobId)
 }
 
-func (m *mockDeliverRepo) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID) error {
+func (m *mockDeliverRepo) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error {
 	if m.setJobStatusFn == nil {
 		return nil
 	}
-	return m.setJobStatusFn(ctx, status, jobId)
+	return m.setJobStatusFn(ctx, status, jobId, runId)
 }
 
 type mockDeliverHTTPClient struct {
@@ -46,6 +46,7 @@ func deliverTestLogger() *slog.Logger {
 func deliverHeaderWithJobID(jobID uuid.UUID) nats.Header {
 	header := nats.Header{}
 	header.Set("job-id", jobID.String())
+	header.Set("run-id", uuid.New().String())
 	return header
 }
 
@@ -85,7 +86,7 @@ func TestDeliverService_Handle(t *testing.T) {
 					Headers:   headersJSON,
 				}, nil
 			},
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				if status != "delivering" && status != "idle" {
 					t.Fatalf("expected delivering or idle status, got %s", status)
 				}
@@ -184,7 +185,7 @@ func TestDeliverService_Handle(t *testing.T) {
 					Headers:   nil,
 				}, nil
 			},
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				return nil
 			},
 		}
@@ -246,7 +247,7 @@ func TestDeliverService_Handle(t *testing.T) {
 					Headers:   json.RawMessage(`{}`),
 				}, nil
 			},
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				statuses = append(statuses, status)
 				if status == "idle" {
 					t.Fatal("idle status must not be set for retryable http status")
@@ -284,7 +285,7 @@ func TestDeliverService_Handle(t *testing.T) {
 					Headers:   json.RawMessage(`{}`),
 				}, nil
 			},
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				return statusErr
 			},
 		}
@@ -297,8 +298,8 @@ func TestDeliverService_Handle(t *testing.T) {
 
 		needSetDbStatus := true
 		err, statusCode := svc.Handle(context.Background(), natsPayload, deliverHeaderWithJobID(jobID), &needSetDbStatus, nil)
-		if !errors.Is(err, natsqueue.NakError) {
-			t.Fatalf("expected nak error, got %v", err)
+		if !errors.Is(err, natsqueue.TermError) {
+			t.Fatalf("expected term error, got %v", err)
 		}
 		if statusCode != 0 {
 			t.Fatalf("expected status 0, got %d", statusCode)
@@ -311,7 +312,7 @@ func TestDeliverService_HandleError(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockDeliverRepo{
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				if status != "error" {
 					t.Fatalf("expected error status, got %s", status)
 				}
@@ -335,7 +336,7 @@ func TestDeliverService_HandleError(t *testing.T) {
 	t.Run("repo error", func(t *testing.T) {
 		called := false
 		repo := &mockDeliverRepo{
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID) error {
+			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				called = true
 				return errors.New("set status failed")
 			},

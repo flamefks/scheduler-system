@@ -13,22 +13,28 @@ import (
 
 const claimNextJobs = `-- name: ClaimNextJobs :many
 WITH picked AS (
-    SELECT s.job_id
+    SELECT s.job_id, gen_random_uuid() AS run_id
     FROM job_schedules s
-    WHERE s.status = 'idle'
+    WHERE s.is_active = TRUE
       AND s.next_run_at IS NOT NULL
       AND s.next_run_at <= NOW()
       AND (
             s.target_runs = 0
             OR s.done_runs < s.target_runs
           )
+      AND NOT EXISTS (
+            SELECT 1
+            FROM job_runs r
+            WHERE r.job_id = s.job_id
+              AND r.status IN ('scheduled', 'fetching', 'delivering')
+          )
     ORDER BY s.next_run_at
     FOR UPDATE SKIP LOCKED
     LIMIT $1::int
-)
+),
+updated AS (
 UPDATE job_schedules s
 SET
-    status = 'scheduled',
     last_scheduled_at = NOW(),
     next_run_at = CASE
         WHEN target_runs != 0 AND done_runs + 1 >= target_runs
@@ -40,22 +46,47 @@ SET
     updated_at = NOW()
 FROM picked
 WHERE s.job_id = picked.job_id
-RETURNING s.job_id
+RETURNING s.job_id, picked.run_id
+),
+inserted_runs AS (
+    INSERT INTO job_runs (
+        id,
+        job_id,
+        status,
+        scheduled_at
+    )
+    SELECT
+        run_id,
+        job_id,
+        'scheduled',
+        NOW()
+    FROM updated
+    RETURNING job_id, id
+)
+SELECT
+    job_id,
+    id AS run_id
+FROM inserted_runs
 `
 
-func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]uuid.UUID, error) {
+type ClaimNextJobsRow struct {
+	JobID uuid.UUID
+	RunID uuid.UUID
+}
+
+func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]ClaimNextJobsRow, error) {
 	rows, err := q.db.Query(ctx, claimNextJobs, batchSize)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []ClaimNextJobsRow
 	for rows.Next() {
-		var job_id uuid.UUID
-		if err := rows.Scan(&job_id); err != nil {
+		var i ClaimNextJobsRow
+		if err := rows.Scan(&i.JobID, &i.RunID); err != nil {
 			return nil, err
 		}
-		items = append(items, job_id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -64,14 +95,14 @@ func (q *Queries) ClaimNextJobs(ctx context.Context, batchSize int32) ([]uuid.UU
 }
 
 const resetHungMessage = `-- name: ResetHungMessage :execrows
-UPDATE job_schedules
+UPDATE job_runs
 SET
-    status = 'idle',
-    updated_at = NOW()
+    status = 'error',
+    ended_at = NOW()
 WHERE (status IN ('fetching', 'delivering')
-  AND NOW() - COALESCE(last_run_taken_at, last_scheduled_at) > ($1::bigint * interval '1 second'))
+  AND NOW() - COALESCE(deliver_started_at, fetch_started_at, scheduled_at) > ($1::bigint * interval '1 second'))
 OR (status = 'scheduled'
-  AND NOW() - last_scheduled_at > ($2::bigint * interval '1 second'))
+  AND NOW() - scheduled_at > ($2::bigint * interval '1 second'))
 `
 
 type ResetHungMessageParams struct {
@@ -90,8 +121,8 @@ func (q *Queries) ResetHungMessage(ctx context.Context, arg ResetHungMessagePara
 const switchToDisabledIfNeed = `-- name: SwitchToDisabledIfNeed :execrows
 UPDATE job_schedules
 SET
-    status = 'disabled'
-WHERE status = 'idle'
+    is_active = FALSE
+WHERE is_active = TRUE
     AND done_runs >= target_runs AND target_runs != 0
 `
 

@@ -9,7 +9,6 @@ import (
 	repo "github.com/flamefks/scheduler-system/internal/scheduler/repository"
 	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
 	qpublsher "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
-	"github.com/google/uuid"
 )
 
 type SchedulerService struct {
@@ -28,11 +27,11 @@ func NewSchedulerService(logger *slog.Logger, r repo.PostgresRepo, p qpublsher.A
 	}
 }
 
-func (s *SchedulerService) ClaimNextJobs(pctx context.Context, jobBatchSize int) []uuid.UUID {
+func (s *SchedulerService) ClaimNextJobs(pctx context.Context, jobBatchSize int) []sharedData.JobRun {
 	ctx, cancel := context.WithTimeout(pctx, 5*time.Second)
 	defer cancel()
 
-	idList, err := s.repo.ClaimNextJobs(ctx, jobBatchSize)
+	jobRuns, err := s.repo.ClaimNextJobs(ctx, jobBatchSize)
 	if err != nil {
 		s.logger.Error(
 			"failed_claim_jobs",
@@ -44,21 +43,22 @@ func (s *SchedulerService) ClaimNextJobs(pctx context.Context, jobBatchSize int)
 
 	s.logger.Info(
 		"success_claim_jobs",
-		slog.Int("jobs_count", len(idList)),
-		slog.Any("job_id_list", idList),
+		slog.Int("job_runs_count", len(jobRuns)),
+		slog.Any("job_runs", jobRuns),
 	)
 	s.metrics.RecordClaimed(ctx, "success")
-	s.metrics.RecordClaimedJobs(ctx, len(idList))
+	s.metrics.RecordClaimedJobs(ctx, len(jobRuns))
 
-	return idList
+	return jobRuns
 }
 
-func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uuid.UUID) {
+func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, jobRun sharedData.JobRun) {
 	ctx, cancel := context.WithTimeout(pctx, 5*time.Second)
 	defer cancel()
 
 	natsHeaders := map[string]string{
-		"job-id": dataId.String(),
+		"job-id": jobRun.JobID.String(),
+		"run-id": jobRun.RunID.String(),
 	}
 
 	err := s.publisher.Publish(ctx, sharedData.JobsSubjectFetcher, nil, natsHeaders)
@@ -73,7 +73,8 @@ func (s *SchedulerService) PublishJobIdToChannel(pctx context.Context, dataId uu
 	s.metrics.RecordNatsPublish(ctx, "success")
 	s.logger.Info(
 		"success_publish_job_id",
-		slog.String("job_id", dataId.String()),
+		slog.String("job_id", jobRun.JobID.String()),
+		slog.String("run_id", jobRun.RunID.String()),
 	)
 }
 

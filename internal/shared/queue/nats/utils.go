@@ -19,3 +19,16 @@ func GetJobIDFromHeader(strJobId string) (uuid.UUID, error) {
 
 	return jobId, nil
 }
+
+func GetRunIDFromHeader(strRunId string) (uuid.UUID, error) {
+	if strRunId == "" {
+		return uuid.Nil, errors.New("missing run-id header")
+	}
+
+	runId, err := uuid.Parse(strRunId)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid run-id: %w", err)
+	}
+
+	return runId, nil
+}

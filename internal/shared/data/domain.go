@@ -37,3 +37,8 @@ type Job struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+type JobRun struct {
+	JobID uuid.UUID
+	RunID uuid.UUID
+}

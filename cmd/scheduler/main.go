@@ -19,7 +19,6 @@ import (
 	service "github.com/flamefks/scheduler-system/internal/scheduler/service"
 	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
-	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"gopkg.in/yaml.v3"
 )
@@ -116,18 +115,18 @@ func main() {
 		case <-appCtx.Done():
 			return
 		case <-ticker.C:
-			jobIds := schedulerService.ClaimNextJobs(appCtx, coreCfg.Tasks.GetJobSettings.JobsBatchSize)
-			if len(jobIds) == 0 {
+			jobRuns := schedulerService.ClaimNextJobs(appCtx, coreCfg.Tasks.GetJobSettings.JobsBatchSize)
+			if len(jobRuns) == 0 {
 				continue
 			}
 
-			for _, jId := range jobIds {
+			for _, jobRun := range jobRuns {
 				sem <- struct{}{}
-				job_id := jId
-				go func(id uuid.UUID) {
+				run := jobRun
+				go func() {
 					defer func() { <-sem }()
-					schedulerService.PublishJobIdToChannel(appCtx, id)
-				}(job_id)
+					schedulerService.PublishJobIdToChannel(appCtx, run)
+				}()
 			}
 		}
 	}

@@ -48,30 +48,57 @@ func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfig
 	return i, err
 }
 
-const setJobStatus = `-- name: SetJobStatus :exec
-UPDATE job_schedules
+const setJobStatus = `-- name: SetJobStatus :one
+WITH updated_run AS (
+UPDATE job_runs
 SET
     status = $1,
-    last_run_taken_at = CASE
-        WHEN $1::schedule_status IN ('fetching', 'delivering')
+    fetch_started_at = CASE
+        WHEN $1::schedule_status = 'fetching'
             THEN NOW()
-        ELSE last_run_taken_at
+        ELSE fetch_started_at
     END,
+    deliver_started_at = CASE
+        WHEN $1::schedule_status = 'delivering'
+            THEN NOW()
+        ELSE deliver_started_at
+    END,
+    ended_at = CASE
+        WHEN $1::schedule_status IN ('idle', 'error')
+            THEN NOW()
+        ELSE ended_at
+    END
+WHERE id = $2
+  AND job_id = $3
+  AND (
+        ($1::schedule_status = 'fetching' AND status = 'scheduled')
+        OR ($1::schedule_status = 'delivering' AND status = 'fetching')
+        OR ($1::schedule_status IN ('idle', 'error') AND status IN ('scheduled', 'fetching', 'delivering'))
+      )
+RETURNING job_id
+)
+UPDATE job_schedules s
+SET
     done_runs = CASE
         WHEN $1::schedule_status IN ('idle', 'error')
             THEN done_runs + 1
         ELSE done_runs
     END,
     updated_at = NOW()
-WHERE job_id = $2
+FROM updated_run ur
+WHERE s.job_id = ur.job_id
+RETURNING s.job_id
 `
 
 type SetJobStatusParams struct {
 	Status ScheduleStatus
+	RunID  uuid.UUID
 	JobID  uuid.UUID
 }
 
-func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) error {
-	_, err := q.db.Exec(ctx, setJobStatus, arg.Status, arg.JobID)
-	return err
+func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, setJobStatus, arg.Status, arg.RunID, arg.JobID)
+	var job_id uuid.UUID
+	err := row.Scan(&job_id)
+	return job_id, err
 }

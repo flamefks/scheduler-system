@@ -73,6 +73,13 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		return fmt.Errorf("worker: consumer error: %v", err)
 	}
 
+	info, err := consumer.Info(initCtx)
+	if err != nil {
+		return fmt.Errorf("worker: consumer info error: %w", err)
+	}
+
+	maxDeliver := info.Config.MaxDeliver
+
 	cc, err := consumer.Consume(func(msg jetstream.Msg) {
 		msgCtx, cancel := context.WithTimeout(appCtx, 2*time.Hour)
 		defer cancel()
@@ -84,7 +91,7 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 		if err == nil {
 			recordAnswer(msgCtx, answerRecorder, "ack", ackMsg(msg))
 		} else {
-			if errors.Is(err, TermError) {
+			if errors.Is(err, TermError) || (deliveryAttempt == uint64(maxDeliver)) {
 				errCtx, cancelErr := context.WithTimeout(appCtx, 10*time.Minute)
 				defer cancelErr()
 				errHandler(errCtx, binData, header)

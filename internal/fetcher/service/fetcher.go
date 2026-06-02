@@ -48,20 +48,31 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 		)
 		return natsqueue.TermError, 0
 	}
+	strRunId := natsHeader.Get("run-id")
+	runId, err := natsqueue.GetRunIDFromHeader(strRunId)
+	if err != nil {
+		f.logger.Error(
+			"invalid_run_id_header",
+			slog.String("run_id_raw", strRunId),
+			slog.Any("err", err),
+		)
+		return natsqueue.TermError, 0
+	}
 
 	ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
 	defer cancel()
 
 	if *needSetDbStatus {
-		err = f.repo.SetJobStatus(ctx, "fetching", jobId)
+		err = f.repo.SetJobStatus(ctx, "fetching", jobId, runId)
 		if err != nil {
 			f.logger.Error(
 				"failed_set_job_status",
 				slog.Any("job_id", jobId),
+				slog.Any("run_id", runId),
 				slog.String("new_status", "fetching"),
 				slog.Any("err", err),
 			)
-			return natsqueue.NakError, 0
+			return natsqueue.TermError, 0
 		}
 	}
 
@@ -146,6 +157,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 
 	err = f.publisher.Publish(ctx, sharedData.JobsSubjectDeliver, response.Body, map[string]string{
 		"job-id": strJobId,
+		"run-id": strRunId,
 	})
 
 	if err != nil {
@@ -174,8 +186,19 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 		)
 		return
 	}
+	strRunId := natsHeader.Get("run-id")
+	runId, err := natsqueue.GetRunIDFromHeader(strRunId)
+	if err != nil {
+		f.metrics.RecordErrorHandler(ctx, "error")
+		f.logger.Error(
+			"invalid_run_id_header",
+			slog.String("run_id_raw", strRunId),
+			slog.Any("err", err),
+		)
+		return
+	}
 
-	err = f.repo.SetJobStatus(ctx, "error", jobId)
+	err = f.repo.SetJobStatus(ctx, "error", jobId, runId)
 
 	if err != nil {
 		f.metrics.RecordErrorHandler(ctx, "error")

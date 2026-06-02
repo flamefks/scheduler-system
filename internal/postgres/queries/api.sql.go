@@ -14,9 +14,14 @@ import (
 
 const activateJob = `-- name: ActivateJob :one
 UPDATE job_schedules
-SET status = 'idle', updated_at = NOW()
+SET is_active = TRUE, updated_at = NOW()
 WHERE job_id = $1
-    AND status NOT IN ('scheduled', 'fetching', 'delivering')
+    AND NOT EXISTS (
+        SELECT 1
+        FROM job_runs r
+        WHERE r.job_id = $1
+          AND r.status IN ('scheduled', 'fetching', 'delivering')
+    )
 RETURNING job_id
 `
 
@@ -129,9 +134,14 @@ func (q *Queries) CreateJobSchedule(ctx context.Context, arg CreateJobSchedulePa
 
 const deactivateJob = `-- name: DeactivateJob :one
 UPDATE job_schedules
-SET status = 'disabled', updated_at = NOW()
+SET is_active = FALSE, updated_at = NOW()
 WHERE job_id = $1
-    AND status NOT IN ('scheduled', 'fetching', 'delivering')
+    AND NOT EXISTS (
+        SELECT 1
+        FROM job_runs r
+        WHERE r.job_id = $1
+          AND r.status IN ('scheduled', 'fetching', 'delivering')
+    )
 RETURNING job_id
 `
 
@@ -178,18 +188,32 @@ func (q *Queries) GetJob(ctx context.Context, id uuid.UUID) (Job, error) {
 
 const getJobSchedule = `-- name: GetJobSchedule :one
 SELECT
-    job_id,
-    status,
-    repeat_interval_sec,
-    done_runs,
-    target_runs,
-    last_scheduled_at,
-    last_run_taken_at,
-    next_run_at,
-    created_at,
-    updated_at
-FROM job_schedules
-WHERE job_id = $1
+    s.job_id,
+    CASE
+        WHEN s.is_active = FALSE THEN 'disabled'::schedule_status
+        ELSE COALESCE(r.status, 'idle'::schedule_status)
+    END AS status,
+    s.repeat_interval_sec,
+    s.done_runs,
+    s.target_runs,
+    s.last_scheduled_at,
+    COALESCE(r.deliver_started_at, r.fetch_started_at) AS last_run_taken_at,
+    s.next_run_at,
+    s.created_at,
+    s.updated_at
+FROM job_schedules s
+LEFT JOIN LATERAL (
+    SELECT
+        status,
+        fetch_started_at,
+        deliver_started_at
+    FROM job_runs
+    WHERE job_id = s.job_id
+      AND status IN ('scheduled', 'fetching', 'delivering')
+    ORDER BY scheduled_at DESC
+    LIMIT 1
+) r ON TRUE
+WHERE s.job_id = $1
 `
 
 type GetJobScheduleRow struct {

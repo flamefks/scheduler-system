@@ -120,7 +120,6 @@ type JobIoConfig struct {
 
 type JobSchedule struct {
 	JobID             uuid.UUID
-	Status            ScheduleStatus
 	RepeatIntervalSec int32
 	TargetRuns        int32
 	LastScheduledAt   *time.Time
@@ -128,5 +127,15 @@ type JobSchedule struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DoneRuns          int32
-	LastRunTakenAt    *time.Time
+	IsActive          bool
+}
+
+type JobRun struct {
+	ID               uuid.UUID
+	JobID            uuid.UUID
+	Status           ScheduleStatus
+	ScheduledAt      time.Time
+	FetchStartedAt   *time.Time
+	DeliverStartedAt *time.Time
+	EndedAt          *time.Time
 }

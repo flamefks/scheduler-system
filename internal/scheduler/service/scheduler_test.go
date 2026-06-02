@@ -13,12 +13,12 @@ import (
 )
 
 type mockSchedulerRepo struct {
-	claimNextJobsFn          func(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error)
+	claimNextJobsFn          func(ctx context.Context, jobBatchSize int) ([]data.JobRun, error)
 	resetHungMessageFn       func(ctx context.Context, scheduleJobTimeout int, procJobTimeout int) (int64, error)
 	switchToDisabledIfNeedFn func(ctx context.Context) (int64, error)
 }
 
-func (m *mockSchedulerRepo) ClaimNextJobs(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error) {
+func (m *mockSchedulerRepo) ClaimNextJobs(ctx context.Context, jobBatchSize int) ([]data.JobRun, error) {
 	return m.claimNextJobsFn(ctx, jobBatchSize)
 }
 
@@ -60,26 +60,29 @@ func TestNewSchedulerService(t *testing.T) {
 }
 
 func TestSchedulerService_ClaimNextJobs(t *testing.T) {
-	expectedIDs := []uuid.UUID{uuid.New(), uuid.New()}
+	expectedRuns := []data.JobRun{
+		{JobID: uuid.New(), RunID: uuid.New()},
+		{JobID: uuid.New(), RunID: uuid.New()},
+	}
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockSchedulerRepo{
-			claimNextJobsFn: func(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error) {
+			claimNextJobsFn: func(ctx context.Context, jobBatchSize int) ([]data.JobRun, error) {
 				if jobBatchSize != 2 {
 					t.Fatalf("expected batch size 2, got %d", jobBatchSize)
 				}
-				return expectedIDs, nil
+				return expectedRuns, nil
 			},
 		}
 		svc := NewSchedulerService(schedulerTestLogger(), repo, &mockSchedulerPublisher{}, nil)
 
 		got := svc.ClaimNextJobs(context.Background(), 2)
-		if len(got) != len(expectedIDs) {
-			t.Fatalf("expected %d ids, got %d", len(expectedIDs), len(got))
+		if len(got) != len(expectedRuns) {
+			t.Fatalf("expected %d runs, got %d", len(expectedRuns), len(got))
 		}
-		for i := range expectedIDs {
-			if got[i] != expectedIDs[i] {
-				t.Fatalf("expected id %s, got %s", expectedIDs[i], got[i])
+		for i := range expectedRuns {
+			if got[i] != expectedRuns[i] {
+				t.Fatalf("expected run %+v, got %+v", expectedRuns[i], got[i])
 			}
 		}
 	})
@@ -87,7 +90,7 @@ func TestSchedulerService_ClaimNextJobs(t *testing.T) {
 	t.Run("repo error", func(t *testing.T) {
 		repoErr := errors.New("claim failed")
 		repo := &mockSchedulerRepo{
-			claimNextJobsFn: func(ctx context.Context, jobBatchSize int) ([]uuid.UUID, error) {
+			claimNextJobsFn: func(ctx context.Context, jobBatchSize int) ([]data.JobRun, error) {
 				return nil, repoErr
 			},
 		}
@@ -102,6 +105,8 @@ func TestSchedulerService_ClaimNextJobs(t *testing.T) {
 
 func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 	jobID := uuid.New()
+	runID := uuid.New()
+	jobRun := data.JobRun{JobID: jobID, RunID: runID}
 
 	t.Run("success", func(t *testing.T) {
 		publisher := &mockSchedulerPublisher{
@@ -115,12 +120,15 @@ func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 				if headers["job-id"] != jobID.String() {
 					t.Fatalf("expected job header %s, got %s", jobID, headers["job-id"])
 				}
+				if headers["run-id"] != runID.String() {
+					t.Fatalf("expected run header %s, got %s", runID, headers["run-id"])
+				}
 				return nil
 			},
 		}
 		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher, nil)
 
-		svc.PublishJobIdToChannel(context.Background(), jobID)
+		svc.PublishJobIdToChannel(context.Background(), jobRun)
 	})
 
 	t.Run("publisher error is swallowed", func(t *testing.T) {
@@ -131,7 +139,7 @@ func TestSchedulerService_PublishJobIdToChannel(t *testing.T) {
 		}
 		svc := NewSchedulerService(schedulerTestLogger(), &mockSchedulerRepo{}, publisher, nil)
 
-		svc.PublishJobIdToChannel(context.Background(), jobID)
+		svc.PublishJobIdToChannel(context.Background(), jobRun)
 	})
 }
 
