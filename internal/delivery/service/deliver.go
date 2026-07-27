@@ -61,10 +61,10 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	defer cancel()
 
 	if *needSetDbStatus {
-		err = ds.repo.SetJobStatus(ctx, "delivering", jobId, runId)
+		err = ds.repo.SetJobRunStatus(ctx, "delivering", jobId, runId)
 		if err != nil {
 			ds.logger.Error(
-				"failed_set_job_status",
+				"failed_set_job_run_status",
 				slog.Any("job_id", jobId),
 				slog.Any("run_id", runId),
 				slog.String("new_status", "delivering"),
@@ -138,10 +138,12 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	ds.logger.Info(
 		"success_sent_response",
 		slog.String("job_id", strJobId),
-		slog.Any("data", &response),
+		slog.String("run_id", strRunId),
+		slog.Int("http_status_code", response.StatusCode),
+		slog.Int("response_body_bytes", len(response.Body)),
 	)
 
-	err = ds.repo.SetJobStatus(ctx, "idle", jobId, runId)
+	err = ds.repo.SetJobRunStatus(ctx, "idle", jobId, runId)
 	if err != nil {
 		return natsqueue.TermError, 0
 	}
@@ -173,7 +175,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 		return
 	}
 
-	err = ds.repo.SetJobStatus(ctx, "error", jobId, runId)
+	err = ds.repo.SetJobRunStatus(ctx, "error", jobId, runId)
 	if err != nil {
 		ds.metrics.RecordErrorHandler(ctx, "error")
 		ds.logger.Error(

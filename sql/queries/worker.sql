@@ -8,7 +8,7 @@ SELECT
 FROM job_io_configs  
 WHERE job_id= $1 AND kind = $2;
 
--- name: SetJobStatus :one
+-- name: SetJobRunStatus :one
 WITH updated_run AS (
 UPDATE job_runs
 SET

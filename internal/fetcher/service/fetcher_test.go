@@ -16,19 +16,19 @@ import (
 )
 
 type mockFetcherRepo struct {
-	getConfigFn    func(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error)
-	setJobStatusFn func(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error
+	getConfigFn       func(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error)
+	setJobRunStatusFn func(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error
 }
 
 func (m *mockFetcherRepo) GetConfig(ctx context.Context, kind string, jobId uuid.UUID) (*data.IOConfig, error) {
 	return m.getConfigFn(ctx, kind, jobId)
 }
 
-func (m *mockFetcherRepo) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error {
-	if m.setJobStatusFn == nil {
+func (m *mockFetcherRepo) SetJobRunStatus(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error {
+	if m.setJobRunStatusFn == nil {
 		return nil
 	}
-	return m.setJobStatusFn(ctx, status, jobId, runId)
+	return m.setJobRunStatusFn(ctx, status, jobId, runId)
 }
 
 type mockFetcherPublisher struct {
@@ -337,7 +337,7 @@ func TestFetcherService_ErrorHandler(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := &mockFetcherRepo{
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
+			setJobRunStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				if status != "error" {
 					t.Fatalf("expected error status, got %s", status)
 				}
@@ -361,7 +361,7 @@ func TestFetcherService_ErrorHandler(t *testing.T) {
 	t.Run("repo error", func(t *testing.T) {
 		called := false
 		repo := &mockFetcherRepo{
-			setJobStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
+			setJobRunStatusFn: func(ctx context.Context, status string, gotJobID uuid.UUID, runID uuid.UUID) error {
 				called = true
 				return errors.New("set status failed")
 			},

@@ -67,8 +67,8 @@ func loadCoreConfig(path string) (*CoreConfig, error) {
 	}
 	cfg.OtelSection = *otelSection
 
-	if err != nil {
-		return nil, err
-	}
+	// if err != nil {
+	// 	return nil, err
+	// }
 	return cfg, nil
 }

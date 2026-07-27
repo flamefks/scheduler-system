@@ -63,10 +63,10 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 	defer cancel()
 
 	if *needSetDbStatus {
-		err = f.repo.SetJobStatus(ctx, "fetching", jobId, runId)
+		err = f.repo.SetJobRunStatus(ctx, "fetching", jobId, runId)
 		if err != nil {
 			f.logger.Error(
-				"failed_set_job_status",
+				"failed_set_job_run_status",
 				slog.Any("job_id", jobId),
 				slog.Any("run_id", runId),
 				slog.String("new_status", "fetching"),
@@ -139,9 +139,11 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 
 	f.metrics.RecordHTTPRequest(ctx, "success", response.StatusCode)
 	f.logger.Info(
-		"response",
+		"fetcher_http_response",
 		slog.String("job_id", strJobId),
-		slog.Any("data", &response),
+		slog.String("run_id", strRunId),
+		slog.Int("http_status_code", response.StatusCode),
+		slog.Int("response_body_bytes", len(response.Body)),
 	)
 
 	if len(reqConfig.JsonSchema) > 0 {
@@ -198,7 +200,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 		return
 	}
 
-	err = f.repo.SetJobStatus(ctx, "error", jobId, runId)
+	err = f.repo.SetJobRunStatus(ctx, "error", jobId, runId)
 
 	if err != nil {
 		f.metrics.RecordErrorHandler(ctx, "error")

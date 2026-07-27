@@ -31,7 +31,7 @@ Known areas that still need work:
 
 - NATS retry, ack, nak, term, and final-failure behavior still needs a stricter design pass.
 - Worker concurrency and consumer configuration are still evolving.
-- File logging works for local deploys, but production log shipping should be planned deliberately.
+- Logs go to stdout by default. File logging is optional and should be enabled deliberately.
 - Kubernetes or Helm deployment files are not finalized.
 - Tracing is initialized, but spans are not yet consistently added through business flows.
 
@@ -64,6 +64,8 @@ logs/scheduler_1/
 logs/fetcher_1/
 logs/delivery_1/
 ```
+
+The script also generates `deploy/docker-compose.replicas.generated.yml` and runs Docker Compose with both the base and generated files.
 
 ## Observability
 

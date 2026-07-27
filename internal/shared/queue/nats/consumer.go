@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	sharedData "github.com/flamefks/scheduler-system/internal/shared/data"
@@ -20,22 +20,24 @@ var (
 type Consumer struct {
 	js      jetstream.JetStream
 	subject string
+	logger  *slog.Logger
 }
 
 type AnswerRecorder interface {
 	RecordNatsAnswer(ctx context.Context, answerType string, status string)
 }
 
-func NewConsumer(js jetstream.JetStream, subject string) *Consumer {
+func NewConsumer(js jetstream.JetStream, subject string, logger *slog.Logger) *Consumer {
 	return &Consumer{
 		js:      js,
 		subject: subject,
+		logger:  logger,
 	}
 }
 
 func ackMsg(msg jetstream.Msg) error {
 	if err := msg.Ack(); err != nil {
-		log.Printf("failed to ack message: %v", err)
+		slog.Error("failed_ack_message", slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -43,7 +45,7 @@ func ackMsg(msg jetstream.Msg) error {
 
 func nakMsg(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
-		log.Printf("failed to nak message: %v", err)
+		slog.Error("failed_nak_message", slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -51,7 +53,7 @@ func nakMsg(msg jetstream.Msg) error {
 
 func termMsg(msg jetstream.Msg) error {
 	if err := msg.Term(); err != nil {
-		log.Printf("failed to term message: %v", err)
+		slog.Error("failed_term_message", slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -64,7 +66,7 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 	defer cancel()
 	stream, err := c.js.Stream(initCtx, sharedData.NatsStreamName)
 	if err != nil {
-		log.Printf("worker: stream error: %v", err)
+		slog.Error("worker_stream_error", slog.Any("error", err))
 		return fmt.Errorf("worker: stream error: %v", err)
 	}
 
@@ -114,7 +116,7 @@ func (c *Consumer) Consume(appCtx context.Context, handler func(context.Context,
 func deliveryAttemptFromMetadata(msg jetstream.Msg) uint64 {
 	metadata, err := msg.Metadata()
 	if err != nil {
-		log.Printf("failed to read message metadata: %v", err)
+		slog.Error("failed_read_message_metadata", slog.Any("error", err))
 		return 0
 	}
 	return metadata.NumDelivered

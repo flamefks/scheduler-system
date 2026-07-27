@@ -33,7 +33,7 @@ func (service *ApiService) CreateJob(ctx context.Context, job *data.Job) (uuid.U
 		service.metrics.RecordDBOperation(ctx, apimetrics.OperationCreateJob, "error")
 		service.Logger.Error(
 			"create_job",
-			slog.Any("job_data", job),
+			slog.String("job_name", job.Name),
 			slog.Any("error", err),
 		)
 		return uuid.Nil, err
@@ -41,8 +41,8 @@ func (service *ApiService) CreateJob(ctx context.Context, job *data.Job) (uuid.U
 	service.metrics.RecordDBOperation(ctx, apimetrics.OperationCreateJob, "success")
 	service.Logger.Info(
 		"create_job",
-		slog.Any("job_name", job.Name),
-		slog.Any("job", &job),
+		slog.String("job_id", jobId.String()),
+		slog.String("job_name", job.Name),
 	)
 	return jobId, nil
 }
@@ -80,8 +80,7 @@ func (service *ApiService) GetJobByID(ctx context.Context, jobId uuid.UUID) (*da
 	service.metrics.RecordDBOperation(ctx, apimetrics.OperationGetJob, "success")
 	service.Logger.Info(
 		"get_job",
-		slog.Any("job_id", jobId),
-		slog.Any("job", &j),
+		slog.String("job_id", jobId.String()),
 	)
 	return j, nil
 }

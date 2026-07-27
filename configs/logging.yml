@@ -1,6 +1,6 @@
-level: "debug"
-format: "json" 
-output: "file"
+level: "info"
+format: "json"
+output: "stdout"
 
 logger:
   path: "/app/logs/core.log"

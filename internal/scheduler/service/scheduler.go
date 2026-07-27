@@ -44,7 +44,6 @@ func (s *SchedulerService) ClaimNextJobs(pctx context.Context, jobBatchSize int)
 	s.logger.Info(
 		"success_claim_jobs",
 		slog.Int("job_runs_count", len(jobRuns)),
-		slog.Any("job_runs", jobRuns),
 	)
 	s.metrics.RecordClaimed(ctx, "success")
 	s.metrics.RecordClaimedJobs(ctx, len(jobRuns))

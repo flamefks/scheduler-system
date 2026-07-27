@@ -2,12 +2,32 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
 func ValidateLogging(cfg *LoggingConfig) (*LoggingConfig, error) {
-	if cfg.Logger != nil {
-		cfg.Output = "file"
+	if cfg.Level == "" {
+		cfg.Level = "info"
+	}
+
+	if cfg.Format == "" {
+		cfg.Format = "json"
+	}
+
+	if cfg.Output == "" {
+		cfg.Output = "stdout"
+	}
+
+	cfg.Output = strings.ToLower(cfg.Output)
+
+	switch cfg.Output {
+	case "stdout":
+		return cfg, nil
+	case "file":
+		if cfg.Logger == nil {
+			return nil, fmt.Errorf("logging config: logger section is required when output=file")
+		}
 
 		if cfg.Logger.Path == "" {
 			return nil, fmt.Errorf("logging config: logger.path is required when output=file")
@@ -25,11 +45,10 @@ func ValidateLogging(cfg *LoggingConfig) (*LoggingConfig, error) {
 			cfg.Logger.MaxAgeDays = 30
 		}
 
-	} else {
-		cfg.Output = "stdout"
+		return cfg, nil
+	default:
+		return nil, fmt.Errorf("logging config: unsupported output %q", cfg.Output)
 	}
-
-	return cfg, nil
 }
 
 func ValidateDbSection(cfg *PostgresSection) (*PostgresSection, error) {

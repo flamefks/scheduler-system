@@ -48,7 +48,7 @@ func (q *Queries) GetConfig(ctx context.Context, arg GetConfigParams) (GetConfig
 	return i, err
 }
 
-const setJobStatus = `-- name: SetJobStatus :one
+const setJobRunStatus = `-- name: SetJobRunStatus :one
 WITH updated_run AS (
 UPDATE job_runs
 SET
@@ -90,14 +90,14 @@ WHERE s.job_id = ur.job_id
 RETURNING s.job_id
 `
 
-type SetJobStatusParams struct {
+type SetJobRunStatusParams struct {
 	Status ScheduleStatus
 	RunID  uuid.UUID
 	JobID  uuid.UUID
 }
 
-func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, setJobStatus, arg.Status, arg.RunID, arg.JobID)
+func (q *Queries) SetJobRunStatus(ctx context.Context, arg SetJobRunStatusParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, setJobRunStatus, arg.Status, arg.RunID, arg.JobID)
 	var job_id uuid.UUID
 	err := row.Scan(&job_id)
 	return job_id, err

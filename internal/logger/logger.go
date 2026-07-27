@@ -36,7 +36,9 @@ func NewLogger(cfg *appconfig.LoggingConfig) (*slog.Logger, error) {
 		handler = slog.NewJSONHandler(writer, opts)
 	}
 
-	return slog.New(handler), nil
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	return logger, nil
 }
 
 func buildWriter(cfg *appconfig.LoggingConfig) (io.Writer, error) {
@@ -75,13 +77,15 @@ func newRollingFileWriter(fileCfg *appconfig.FileSettings) (io.Writer, error) {
 
 func parseLevel(raw string) (slog.Level, error) {
 	switch strings.ToLower(raw) {
-	case "info":
+	case "", "info":
 		return slog.LevelInfo, nil
+	case "debug":
+		return slog.LevelDebug, nil
 	case "warn", "warning":
 		return slog.LevelWarn, nil
 	case "error":
 		return slog.LevelError, nil
 	default:
-		return slog.LevelDebug, nil
+		return 0, fmt.Errorf("unsupported log level %q", raw)
 	}
 }

@@ -41,13 +41,13 @@ func (repo *WorkerRepository) GetConfig(ctx context.Context, kind string, jobId 
 	}, nil
 }
 
-func (repo *WorkerRepository) SetJobStatus(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error {
+func (repo *WorkerRepository) SetJobRunStatus(ctx context.Context, status string, jobId uuid.UUID, runId uuid.UUID) error {
 	jStatus, err := getJobStatusEnum(status)
 	if err != nil {
 		return err
 	}
 
-	_, err = repo.q.SetJobStatus(ctx, db.SetJobStatusParams{
+	_, err = repo.q.SetJobRunStatus(ctx, db.SetJobRunStatusParams{
 		Status: jStatus,
 		RunID:  runId,
 		JobID:  jobId,

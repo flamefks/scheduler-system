@@ -20,7 +20,6 @@ import (
 	sharedotel "github.com/flamefks/scheduler-system/internal/shared/otel"
 	qnats "github.com/flamefks/scheduler-system/internal/shared/queue/nats"
 	"github.com/nats-io/nats.go"
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -32,11 +31,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	b, err := yaml.Marshal(logCfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Logging config successfully parsed: %v", string(b))
 
 	// logger
 	logger, err := logging.NewLogger(logCfg)
@@ -77,13 +71,15 @@ func main() {
 	// nats
 	nc, err := nats.Connect(coreCfg.Nats.Url)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("nats_connection", slog.String("status", "error"), slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer nc.Drain()
 
 	js, err := qnats.ConnectJetStream(nc)
 	if err != nil {
-		log.Fatalf("Error connecting stream: %v", err)
+		logger.Error("jetstream_connection", slog.String("status", "error"), slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	//logic
