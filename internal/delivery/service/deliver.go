@@ -151,7 +151,7 @@ func (ds *DeliverService) Handle(parentCtx context.Context, binNatsMsg []byte, n
 	return nil, response.StatusCode
 }
 
-func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) {
+func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -161,7 +161,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 	strRunId := natsHeader.Get("run-id")
 	runId, err := natsqueue.GetRunIDFromHeader(strRunId)
@@ -172,7 +172,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 			slog.String("run_id_raw", strRunId),
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 
 	err = ds.repo.SetJobRunStatus(ctx, "error", jobId, runId)
@@ -182,7 +182,7 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 	ds.metrics.RecordErrorHandler(ctx, "success")
 	ds.metrics.RecordErrorHandlerJobs(ctx, 1)
@@ -190,12 +190,19 @@ func (ds *DeliverService) HandleError(ctx context.Context, binData []byte, natsH
 		"success_handle_error",
 		slog.String("job_id", strJobId),
 	)
+
+	return nil
 }
 
-func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header, deliveryAttempt uint64) error {
+func (ds *DeliverService) PipelineHandler(
+	parentCtx context.Context, binNatsMsg []byte, natsHeader nats.Header, deliveryAttempt uint64,
+	maxTimeCompleting time.Duration,
+) error {
 	config := coreConf.GetCoreConfig().HttpRetry
 	needNotifyDb := true
 	delay := config.BaseDelay
+	deadline := time.Now().Add(maxTimeCompleting)
+
 	for attempt := 0; attempt < config.MaxAttempts; attempt++ {
 		select {
 		case <-parentCtx.Done():
@@ -205,8 +212,8 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 
 		err, statusCode := ds.Handle(parentCtx, binNatsMsg, natsHeader, &needNotifyDb, config.RetryOnStatus)
 		isHttpError := utils.InSlice(config.RetryOnStatus, statusCode)
-		if err == nil && !isHttpError {
-			return nil
+		if !isHttpError {
+			return err
 		}
 
 		ds.logger.Warn(
@@ -219,7 +226,7 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 
 		if attempt == config.MaxAttempts-1 {
 			if err == nil && isHttpError {
-				return fmt.Errorf("Http_status_code_error: %d", statusCode)
+				return fmt.Errorf("Http_status_code_error: %d; err = %w", statusCode, natsqueue.NakError)
 			} else {
 				return err
 			}
@@ -228,6 +235,20 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 		if config.Backoff == "exponential" {
 			delay = utils.BackoffDuration(attempt, config.BaseDelay, config.MaxDelay)
 		}
+		var ok bool
+		delay, ok = fitRetryDelay(delay, deadline)
+		if !ok {
+			ds.logger.Warn(
+				"http_retry_budget_exhausted",
+				slog.Uint64("delivery_attempt", deliveryAttempt),
+				slog.Int("attempt", attempt),
+				slog.Int("http_status_code", statusCode),
+				slog.Duration("max_time_completing", maxTimeCompleting),
+				slog.Any("error", err),
+			)
+			return err
+		}
+
 		ds.logger.Debug("waiting before retry", slog.Duration("delay", delay))
 
 		select {
@@ -238,4 +259,17 @@ func (ds *DeliverService) PipelineHandler(parentCtx context.Context, binNatsMsg 
 	}
 
 	return fmt.Errorf("max_retries_exceeded")
+}
+
+func fitRetryDelay(delay time.Duration, deadline time.Time) (time.Duration, bool) {
+	const ackSafetyGap = 10 * time.Second
+
+	remaining := time.Until(deadline) - ackSafetyGap
+	if remaining <= 0 {
+		return 0, false
+	}
+	if delay > remaining {
+		return remaining, true
+	}
+	return delay, true
 }

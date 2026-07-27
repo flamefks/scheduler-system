@@ -176,7 +176,7 @@ func (f *FetcherService) Handle(parentCtx context.Context, binData []byte, natsH
 	return nil, response.StatusCode
 }
 
-func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) {
+func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsHeader nats.Header) error {
 	strJobId := natsHeader.Get("job-id")
 	jobId, err := natsqueue.GetJobIDFromHeader(strJobId)
 	if err != nil {
@@ -186,7 +186,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 			slog.String("job_id_raw", natsHeader.Get("job-id")),
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 	strRunId := natsHeader.Get("run-id")
 	runId, err := natsqueue.GetRunIDFromHeader(strRunId)
@@ -197,7 +197,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 			slog.String("run_id_raw", strRunId),
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 
 	err = f.repo.SetJobRunStatus(ctx, "error", jobId, runId)
@@ -208,7 +208,7 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 			"failed_set_job_error",
 			slog.Any("err", err),
 		)
-		return
+		return err
 	}
 	f.metrics.RecordErrorHandler(ctx, "success")
 	f.metrics.RecordErrorHandlerJobs(ctx, 1)
@@ -216,12 +216,19 @@ func (f *FetcherService) ErrorHandler(ctx context.Context, binData []byte, natsH
 		"success_handle_error",
 		slog.String("job_id", strJobId),
 	)
+
+	return nil
 }
 
-func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []byte, natsHeader nats.Header, deliveryAttempt uint64) error {
+func (f *FetcherService) PipelineHandler(
+	parentCtx context.Context, binData []byte, natsHeader nats.Header, deliveryAttempt uint64,
+	maxTimeCompleting time.Duration,
+) error {
 	config := coreConf.GetCoreConfig().HttpRetry
 	needNotifyDb := true
 	delay := config.BaseDelay
+	deadline := time.Now().Add(maxTimeCompleting)
+
 	for attempt := 0; attempt < config.MaxAttempts; attempt++ {
 		select {
 		case <-parentCtx.Done():
@@ -254,6 +261,19 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 		if config.Backoff == "exponential" {
 			delay = utils.BackoffDuration(attempt, config.BaseDelay, config.MaxDelay)
 		}
+		var ok bool
+		delay, ok = fitRetryDelay(delay, deadline)
+		if !ok {
+			f.logger.Warn(
+				"http_retry_budget_exhausted",
+				slog.Uint64("delivery_attempt", deliveryAttempt),
+				slog.Int("attempt", attempt),
+				slog.Int("http_status_code", statusCode),
+				slog.Duration("max_time_completing", maxTimeCompleting),
+				slog.Any("error", err),
+			)
+			return err
+		}
 		f.logger.Debug("waiting before retry", slog.Duration("delay", delay))
 
 		select {
@@ -264,4 +284,17 @@ func (f *FetcherService) PipelineHandler(parentCtx context.Context, binData []by
 	}
 
 	return fmt.Errorf("max retries exceeded")
+}
+
+func fitRetryDelay(delay time.Duration, deadline time.Time) (time.Duration, bool) {
+	const ackSafetyGap = 10 * time.Second
+
+	remaining := time.Until(deadline) - ackSafetyGap
+	if remaining <= 0 {
+		return 0, false
+	}
+	if delay > remaining {
+		return remaining, true
+	}
+	return delay, true
 }

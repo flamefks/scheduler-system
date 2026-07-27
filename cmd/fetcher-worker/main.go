@@ -120,7 +120,12 @@ func main() {
 	)
 
 	// consumer
-	consumer := qnats.NewConsumer(js, sharedData.JobsSubjectFetcher)
+	consumerLogger := logger.With(
+		slog.String("component", "nats_consumer"),
+		slog.String("subject", sharedData.JobsSubjectFetcher),
+		slog.String("group", sharedData.FetcherGroup),
+	)
+	consumer := qnats.NewConsumer(js, sharedData.JobsSubjectFetcher, consumerLogger)
 
 	logger.Info("service_started")
 
